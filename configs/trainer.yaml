@@ -1,0 +1,19 @@
+trainer:
+  gpus: 1
+  log_every_n_steps: 10
+  accelerator: "gpu"
+  MLFLOW_TRACKING_URI: "http://localhost:5000"
+  MLFLOW_SAVE_DIR: ""./mlflow_artifacts"
+  
+  train:
+    experiment_name: ""
+    max_epochs: 10
+    strategy: "auto"
+    results_fp: ""
+
+  checkpoint:
+    checkpoint_path: "./mlflow_artifacts/checkpoints"
+    checkpoint_filename: "airbus-deeplab3-{epoch:02d}-{val_loss:.2f}"
+    n_epoch: 10
+    top_k: 1
+    mointor: "val_loss"

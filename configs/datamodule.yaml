@@ -1,0 +1,12 @@
+datamodule:
+  data_root: "/data"
+  train_root: "data/train"
+  val_root: "/data/val"
+  test_root: "/data/test"
+  batch_size: 4
+  num_workers: 4
+  num_samples: -1
+  mask:
+    type: "random"      # "random" or "none"
+    acceleration: 4     # only used if type is "random"
+  

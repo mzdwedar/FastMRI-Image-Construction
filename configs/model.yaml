@@ -1,0 +1,5 @@
+model:
+  lr: 1e-3
+  chans: 32
+  num_pool_layers: 4
+  drop_prob: 0.0
