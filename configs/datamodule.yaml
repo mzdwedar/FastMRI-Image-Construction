@@ -1,12 +1,12 @@
 datamodule:
-  data_root: "/data"
+  data_root: "data"
   train_root: "data/train"
-  val_root: "/data/val"
-  test_root: "/data/test"
-  batch_size: 4
+  val_root: "data/val"
+  test_root: "data/test"
+  batch_size: ${oc.env:batch_size, 16}
   num_workers: 4
   num_samples: -1
   mask:
-    type: "random"      # "random" or "none"
-    acceleration: 4     # only used if type is "random"
+    type: random
+    acceleration: 4
   
