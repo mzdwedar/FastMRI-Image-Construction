@@ -3,15 +3,27 @@ import subprocess
 import tarfile
 import h5py
 import torch
-import numpy as np
 from torch.utils.data import Dataset
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
+import logging
 
-
+from .utils import move_data
 data_url = os.getenv('url')
 tar_path = "knee_singlecoil_val.tar.xz"
 
+class InferenceCustomDataset(Dataset):
+
+    def __init__(self, data, transform=None):
+        self.data = data
+        self.length = len(next(iter(data.values())))
+        self.transform = transform
+
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        return {key:val[idx] for key, val in self.data.items()}
 
 class FastMRICustomDataset(Dataset):
     """
@@ -35,6 +47,7 @@ class FastMRICustomDataset(Dataset):
                 num_slices = hf["kspace"].shape[0]
                 self.examples += [(fname, slice_num) for slice_num in range(num_slices)]
         self.transform = transform
+        logging.info(f"Loaded {len(self.examples)} slices from {len(self.files)} files (path: {root})")
 
     def __len__(self) -> int:
         """Return the total number of slices across all volumes."""
@@ -58,8 +71,8 @@ class FastMRICustomDataset(Dataset):
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][slice_num]
             target = hf["reconstruction_rss"][slice_num] if "reconstruction_rss" in hf else None
-        kspace = torch.from_numpy(kspace)
-        target = torch.from_numpy(target) if target is not None else None
+        kspace = torch.from_numpy(kspace).to(torch.complex64)
+        target = torch.from_numpy(target).float() if target is not None else None
 
         if self.transform is not None:
             return self.transform(kspace, target, fname, slice_num)
@@ -213,7 +226,8 @@ class FastMRIDataModule(pl.LightningDataModule):
     
     def prepare_data(self):
         """download the dataset from cloud"""
-        if not os.path.exists(os.path.join(self.data_root, 'val')):
+        if not os.path.exists(os.path.join(self.data_root, 'train')):
+            logging.info("Downloading and preparing data...")
             cmd = [
                 "aria2c",
                 "-c",                # continue downloads
@@ -230,7 +244,7 @@ class FastMRIDataModule(pl.LightningDataModule):
             subprocess.run(cmd, check=True)
 
             # Path to your downloaded tar.xz file
-            extract_path = "data/val"  # directory to extract to
+            extract_path = "data"  # directory to extract to
 
             # Make sure the extraction directory exists
             os.makedirs(extract_path, exist_ok=True)
@@ -245,12 +259,27 @@ class FastMRIDataModule(pl.LightningDataModule):
             os.remove(tar_path)
             print(f"Removed {tar_path}")
 
+            # split the data into train and val
+            # TODO: make the splitting reproducible
+            all_files = [filename for filename in os.listdir(self.data_root) if filename.endswith('.h5')]
+            num_train = int(0.8 * len(all_files))
+            train_files = all_files[:num_train]
+            val_files = all_files[num_train:]
+
+            os.makedirs(self.train_root, exist_ok=True)
+            os.makedirs(self.val_root, exist_ok=True)
+            move_data(train_files, self.data_root, self.train_root)
+            move_data(val_files, self.data_root, self.val_root)
+
+            print("Split data into train and val sets.")
+
+        else:
+            logging.info("Data already prepared.")
+
     def setup(self, stage=None):
         """
         Create datasets for each stage: 'fit', 'validate', 'test'.
         """
-        # TODO: Add data splitting
-        
         if stage == "fit" or stage is None:
             self.train_dataset = FastMRICustomDataset(
                 root=self.train_root,
@@ -272,7 +301,8 @@ class FastMRIDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            persistent_workers=True
         )
 
     def val_dataloader(self):
@@ -280,7 +310,8 @@ class FastMRIDataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            persistent_workers=True
         )
 
     def test_dataloader(self):
@@ -288,5 +319,6 @@ class FastMRIDataModule(pl.LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            persistent_workers=True
         )
