@@ -5,29 +5,39 @@ import pytorch_lightning as pl
 from torchmetrics.image import PeakSignalNoiseRatio
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
-from utils import nmse
+from .utils import nmse
 
-class DeepLab(pl.LightningModule):
+class UnetModelModel(pl.LightningModule):
     """
-    A PyTorch Lightning module for MRI image reconstruction using a UNet architecture.
+    A PyTorch Lightning module for MRI image reconstruction using a UnetModel architecture.
     
     This model predicts fully-sampled images from undersampled MRI measurements and
     supports training, validation, and testing with metrics including NMSE, PSNR, and SSIM.
     """
     
-    def __init__(self):
+    def __init__(self, lr, weight_decay, optimizer_name, num_chans, num_pools, dropout):
         """
-        Initializes the DeepLab model with UNet, loss functions, and image quality metrics.
+        Initializes the UnetModel model with UnetModel, loss functions, and image quality metrics.
         """
         super().__init__()
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(
+            {
+                "lr": lr,
+                "weight_decay": weight_decay,
+                "optimizer_name": optimizer_name,
+                "num_chans": num_chans,
+                "num_pools": num_pools,
+                "dropout": dropout,
+            }
+        )
+        
         self.model = Unet(
             in_chans=1,
             out_chans=1,
-            chans=32,
-            num_pool_layers=4,
-            drop_prob=0.0,
+            chans=num_chans,
+            num_pool_layers=num_pools,
+            drop_prob=dropout,
         )
 
         # Metrics for validation
@@ -40,7 +50,7 @@ class DeepLab(pl.LightningModule):
     
     def forward(self, x):
         """
-        Performs a forward pass through the UNet model.
+        Performs a forward pass through the UnetModel model.
         
         Args:
             x (torch.Tensor): Input image tensor of shape (B, C, H, W)
@@ -86,7 +96,7 @@ class DeepLab(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         self.log("nmse", nmse_val, prog_bar=True)
     
-    def validation_epoch_end(self):
+    def on_validation_epoch_end(self):
         """
         Computes and logs PSNR and SSIM at the end of the validation epoch.
         Resets the metrics for the next epoch.
@@ -114,6 +124,9 @@ class DeepLab(pl.LightningModule):
       
         self.log("test_loss", loss, prog_bar=True)
         self.log("nmse_test", nmse_test, prog_bar=True)
+
+        return {'test_loss': loss, 'nmse_test': nmse_test, 
+                'psnr_test': self.psnr_test, 'ssim_test': self.ssim_test}
     
     def on_test_epoch_end(self):
         """
@@ -124,13 +137,20 @@ class DeepLab(pl.LightningModule):
         self.log("ssim_test", self.ssim_test.compute(), prog_bar=True)
         self.psnr_test.reset()
         self.ssim_test.reset()
-        
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        return self(batch)
+    
     def configure_optimizers(self):
         """
         Configures the optimizer for training.
         
         Returns:
-            torch.optim.Optimizer: Adam optimizer with learning rate 1e-3
+            torch.optim.Optimizer
         """
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        if self.optimizer_name == "AdamW":
+            optimizer = torch.option.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+        else:
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+
         return optimizer
