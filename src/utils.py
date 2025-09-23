@@ -12,3 +12,9 @@ def move_data(files, src_dir, dest_dir):
         source = os.path.join(src_dir, filename)
         dest = os.path.join(dest_dir, filename)
         shutil.move(source, dest)
+
+def list_files(directory, extension=".h5", limit=None):
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(extension)]
+    if limit:
+        files = files[:limit]
+    return files
