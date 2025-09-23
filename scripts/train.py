@@ -14,13 +14,8 @@ from fastmri.data.subsample import RandomMaskFunc
 from src.model import UnetModel
 from src.data import FastMRIDataModule
 
-
-@hydra.main(version_base=None, config_path='../configs', config_name='config')
-def main(cfg: DictConfig):
-    """Main train function to train our model"""
-
-    logging.info("\n" + OmegaConf.to_yaml(cfg))
-
+def train_fn(cfg: DictConfig):
+    """Function to train the model"""
     checkpoint_config = ModelCheckpoint(monitor=cfg.trainer.checkpoint.monitor,
                                         mode=cfg.trainer.checkpoint.mode,
                                         save_top_k=cfg.trainer.checkpoint.top_k,
@@ -76,6 +71,15 @@ def main(cfg: DictConfig):
     if best_checkpoint:
         with mlflow.start_run(experiment_id=mlflow_logger.experiment_id):
             mlflow.log_artifact(best_checkpoint, artifact_path="checkpoints")
+
+    return trainer.callback_metrics
+
+@hydra.main(version_base=None, config_path='../configs', config_name='config')
+def main(cfg: DictConfig):
+    """Main train function to train our model"""
+    logging.info("\n" + OmegaConf.to_yaml(cfg))
+
+    train_fn(cfg)
 
 if __name__ == "__main__":
     main() # pylint: disable=no-value-for-parameter
