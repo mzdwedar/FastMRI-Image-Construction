@@ -101,8 +101,8 @@ class UnetModelModel(pl.LightningModule):
         Computes and logs PSNR and SSIM at the end of the validation epoch.
         Resets the metrics for the next epoch.
         """
-        self.log("psnr", self.psnr.compute(), prog_bar=True)
-        self.log("ssim", self.ssim.compute(), prog_bar=True)
+        self.log("psnr", self.psnr.compute(), prog_bar=True, on_epoch=True)
+        self.log("ssim", self.ssim.compute(), prog_bar=True, on_epoch=True)
         self.psnr.reset()
         self.ssim.reset()    
     
@@ -125,16 +125,19 @@ class UnetModelModel(pl.LightningModule):
         self.log("test_loss", loss, prog_bar=True)
         self.log("nmse_test", nmse_test, prog_bar=True)
 
-        return {'test_loss': loss, 'nmse_test': nmse_test, 
-                'psnr_test': self.psnr_test, 'ssim_test': self.ssim_test}
+        return {'test_loss': loss,
+                'nmse_test': nmse_test,
+                'psnr_test': self.psnr_test.compute(),
+                'ssim_test': self.ssim_test.compute()
+                }
     
     def on_test_epoch_end(self):
         """
         Computes and logs PSNR and SSIM at the end of the test epoch.
         Resets the metrics for future test evaluations.
         """
-        self.log("psnr_test", self.psnr_test.compute(), prog_bar=True)
-        self.log("ssim_test", self.ssim_test.compute(), prog_bar=True)
+        self.log("psnr_test", self.psnr_test.compute(), prog_bar=True, on_epoch=True)
+        self.log("ssim_test", self.ssim_test.compute(), prog_bar=True, on_epoch=True)
         self.psnr_test.reset()
         self.ssim_test.reset()
 
@@ -149,7 +152,7 @@ class UnetModelModel(pl.LightningModule):
             torch.optim.Optimizer
         """
         if self.optimizer_name == "AdamW":
-            optimizer = torch.option.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
         else:
             optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
 
