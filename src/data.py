@@ -1,14 +1,20 @@
 import os
 import subprocess
 import tarfile
+import logging
+import random
+import shutil
 import h5py
 import torch
 from torch.utils.data import Dataset
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-import logging
+from collections import defaultdict
+from pathlib import Path
 
-from .utils import move_data
+from .utils import list_files
+
+
 data_url = os.getenv('url')
 tar_path = "knee_singlecoil_val.tar.xz"
 
@@ -25,6 +31,52 @@ class InferenceCustomDataset(Dataset):
     def __getitem__(self, idx):
         return {key:val[idx] for key, val in self.data.items()}
 
+def normalize(tensor: torch.Tensor) -> torch.Tensor:
+    """Normalize a tensor to the range [0, 1]."""
+    tensor = tensor.to(torch.float32)
+    normalized_tensor = tensor / (tensor.max() + 1e-12)
+
+    return normalized_tensor
+
+def split_singlecoil_subjects(data_root:str, train_root:str, val_root:str, train_ratio:float=0.8, seed:int=42):
+    data_root = Path(data_root)
+    train_root = Path(train_root)
+    val_root = Path(val_root)
+
+    os.makedirs(train_root, exist_ok=True)
+    os.makedirs(val_root, exist_ok=True)
+
+    # Step 1: Collect subject -> files
+    subject_to_files = defaultdict(list)
+    for fname in os.listdir(data_root):
+        if not fname.endswith(".h5"):
+            continue
+        fpath = data_root / fname
+        with h5py.File(fpath, "r") as f:
+            sid = str(f.attrs["patient_id"])
+
+        if sid is None:
+            raise RuntimeError(f"No subject ID found in {fname}")
+        subject_to_files[sid].append(fname)
+
+    # Step 2: Shuffle subjects and split
+    subjects = list(subject_to_files.keys())
+    random.seed(seed)
+    random.shuffle(subjects)
+
+    num_train = int(train_ratio * len(subjects))
+    train_subjects = set(subjects[:num_train])
+    val_subjects = set(subjects[num_train:])
+
+    # Step 3: Move files by subject
+    def move_files(subjects, target_root):
+        for sid in subjects:
+            for fname in subject_to_files[sid]:
+                shutil.move(str(data_root / fname), str(target_root / fname))
+
+    move_files(train_subjects, train_root)
+    move_files(val_subjects, val_root)
+
 class FastMRICustomDataset(Dataset):
     """
     PyTorch Dataset for FastMRI singlecoil .h5 files.
@@ -38,9 +90,8 @@ class FastMRICustomDataset(Dataset):
         transform (callable, optional): Transform applied to (kspace, target, fname, slice_num).
     """
     def __init__(self, root: str, transform=None):
-        self.files = [
-            os.path.join(root, fname) for fname in os.listdir(root) if fname.endswith(".h5")
-        ]
+        self.files = list_files(root, extension=".h5")
+
         self.examples = []
         for fname in self.files:
             with h5py.File(fname, "r") as hf:
@@ -75,10 +126,9 @@ class FastMRICustomDataset(Dataset):
         target = torch.from_numpy(target).float() if target is not None else None
 
         if self.transform is not None:
-            return self.transform(kspace, target, fname, slice_num)
+            return self.transform(kspace, target)
 
-        return kspace, target, fname, slice_num
-
+        return kspace, target
 
 # FFT utilities
 def fft2c(img: torch.Tensor) -> torch.Tensor:
@@ -126,7 +176,6 @@ def complex_center_crop(data: torch.Tensor, shape: tuple) -> torch.Tensor:
     h_from = (h - th) // 2
     return data[..., h_from:h_from+th, w_from:w_from+tw]
 
-
 # Transform for k-space → input/target
 class FastMRITransform:
     """
@@ -161,9 +210,6 @@ class FastMRITransform:
                 fname (str): Source filename.
                 slice_num (int): Slice index.
         """
-        # Convert to complex tensor
-        kspace = torch.view_as_complex(kspace.to(torch.float32))
-
         # Apply undersampling mask if provided
         if self.mask_func is not None:
             mask = self.mask_func(kspace.shape)
@@ -174,14 +220,11 @@ class FastMRITransform:
         image = torch.abs(image)  # magnitude image
 
         # Normalize input and target to [0,1]
-        image = image / (image.max() + 1e-12)            
+        image = normalize(image)
         if target is not None:
-            target = target.to(torch.float32)
-            target = target / (target.max() + 1e-12)
+            target = normalize(target)
 
-        return image, target, fname, slice_num
-
-
+        return image, target
 
 class FastMRIDataModule(pl.LightningDataModule):
     """
@@ -261,15 +304,7 @@ class FastMRIDataModule(pl.LightningDataModule):
 
             # split the data into train and val
             # TODO: make the splitting reproducible
-            all_files = [filename for filename in os.listdir(self.data_root) if filename.endswith('.h5')]
-            num_train = int(0.8 * len(all_files))
-            train_files = all_files[:num_train]
-            val_files = all_files[num_train:]
-
-            os.makedirs(self.train_root, exist_ok=True)
-            os.makedirs(self.val_root, exist_ok=True)
-            move_data(train_files, self.data_root, self.train_root)
-            move_data(val_files, self.data_root, self.val_root)
+            split_singlecoil_subjects(self.data_root, self.train_root, self.val_root)
 
             print("Split data into train and val sets.")
 
