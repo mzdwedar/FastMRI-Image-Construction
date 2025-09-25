@@ -1,15 +1,23 @@
+import os
 import logging
 import hydra
+import h5py
 from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 import mlflow
 from mlflow.tracking import MlflowClient
 from urllib.parse import urlparse
-from src.data import FastMRITransform, InferenceCustomDataset, FastMRICustomDataset
-from src.model import UnetModel
 from pathlib import Path
 from hydra.utils import to_absolute_path
+from omegaconf import OmegaConf
+from collections import defaultdict
+import numpy as np
+from tqdm import tqdm
+
+from src.data import FastMRITransform, InferenceCustomDataset, FastMRICustomDataset
+from src.model import UnetModel
+
 
 class TorchPredictor:
     def __init__(self, preprocessor, model):
@@ -132,19 +140,45 @@ def main(cfg: DictConfig):
     Raises:
         Exception: If there is an issue with loading the dataset, model, or during prediction.
     """
-    data_path = to_absolute_path(cfg.trainer.predict.batch.data_path)
-    dataset = FastMRICustomDataset(data_path, transform=FastMRITransform(mask_func=None))
-    data_loader = DataLoader(dataset, batch_size=8, shuffle=False)
-    run_id = get_best_run_id(cfg)
-    checkpoint_path = get_best_checkpoint(run_id)
-    predictor = TorchPredictor.from_checkpoint(checkpoint_path)
+    run_id = cfg.trainer.run_id if cfg.trainer.run_id else get_best_run_id(cfg)
+    os.environ['run_id'] = run_id
+    print(f"Using run_id: {run_id}")
+    print(f"Predictions will be saved to: {cfg.trainer.PREDICTIONS_DIR}")
 
+    os.makedirs(cfg.trainer.PREDICTIONS_DIR, exist_ok=True)
+    checkpoint_path = get_best_checkpoint(run_id)
+
+    logging.info("\n%s", OmegaConf.to_yaml(cfg))
+    logging.info(f"Using run_id: {run_id}")
+
+    data_path = to_absolute_path(cfg.trainer.predict.data_path)
+    dataset = FastMRICustomDataset(data_path, transform=FastMRITransform(mask_func=None))
+    data_loader = DataLoader(dataset, batch_size=8, num_workers=10, shuffle=False)
+    predictor = TorchPredictor.from_checkpoint(checkpoint_path)
     trainer = Trainer(accelerator=cfg.trainer.accelerator,
                       devices=cfg.trainer.gpus
                     )
     
     predictions = predict_fn(trainer, data_loader, predictor)
 
+    logging.info(f"Number of prediction batches: {len(predictions)}")
+
+
+    pred_by_file = defaultdict(list)
+    for pred in tqdm(predictions, desc="creating volumes from slices"):
+        full_path_fname = pred['fname'][0]
+        for pred, slice_num in zip(pred['pred'], pred['slice_num']):
+            pred_by_file[full_path_fname].append((slice_num.item(), pred.cpu().numpy()))
+
+    for full_path_fname, slices in tqdm(pred_by_file.items(), desc="saving volumes"):
+        slices.sort(key=lambda x: x[0])  # Sort by slice number
+        volume = np.stack([s[1] for s in slices], axis=0)
+        fname = os.path.basename(full_path_fname)
+        out_fname = fname.replace('.h5', '_pred.npy')
+        out_path = Path(cfg.trainer.PREDICTIONS_DIR) / out_fname
+        with h5py.File(out_path, 'w') as f:
+            f.create_dataset('pred', data=volume)
+    
     return predictions
 
 
