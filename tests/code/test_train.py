@@ -1,6 +1,8 @@
 import os
 import pytest
 from omegaconf import OmegaConf
+from hydra import compose, initialize
+from pathlib import Path
 from scripts.train import train_fn
 import utils
 
@@ -12,7 +14,9 @@ def test_train_model(dataset_loc: str=None):
     if dataset_loc:
         os.environ["data_root"] = dataset_loc
 
-    cfg = OmegaConf.load("configs/config.yaml")
+    with initialize(config_path='../../configs', version_base=None):
+        cfg = compose(config_name="config")
+        
     metrics = train_fn(cfg)
     utils.delete_experiment(experiment_name=experiment_name)
 
