@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        checkpoint_path: ${checkpoint_path}
+        experiment_id: ${experiment_id}
+        run_id: ${run_id:-dummy}
+    container_name: fastmri-app
+    command: >
+            python scripts/serve.py 
+              --checkpoint_path ${checkpoint_path} 
+              --host 0.0.0.0 
+              --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      checkpoint_path: ${checkpoint_path}
+    volumes:
+      - ./:/app
+    depends_on:
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: fastmri-prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: fastmri-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  prometheus_data:
+  grafana_data:
