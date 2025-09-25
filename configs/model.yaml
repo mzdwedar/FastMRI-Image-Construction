@@ -1,4 +1,4 @@
 model:
-  chans: 32
-  num_pool_layers: 4
-  drop_prob: 0.0
+  num_chans: 32
+  num_pools: 4
+  dropout: 0.0

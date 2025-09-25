@@ -1,4 +1,4 @@
 defaults:
-  - /model
-  - /datamodule
-  - /trainer
+  - model
+  - datamodule
+  - trainer

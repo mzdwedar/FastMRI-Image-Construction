@@ -1,9 +1,9 @@
 datamodule:
-  data_root: "data"
+  data_root: ${oc.env:data_root, data}
   train_root: "data/train"
   val_root: "data/val"
   test_root: "data/test"
-  batch_size: ${oc.env:batch_size, 16}
+  batch_size: ${oc.decode:${oc.env:batch_size, 16}}
   num_workers: 4
   num_samples: -1
   mask:
