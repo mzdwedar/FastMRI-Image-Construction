@@ -7,7 +7,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from .utils import nmse
 
-class UnetModelModel(pl.LightningModule):
+class UnetModel(pl.LightningModule):
     """
     A PyTorch Lightning module for MRI image reconstruction using a UnetModel architecture.
     
@@ -72,7 +72,7 @@ class UnetModelModel(pl.LightningModule):
         Returns:
             torch.Tensor: Computed L1 loss for the batch
         """
-        x, y = batch
+        x, y, _, _ = batch
         logits = self.model(x)
         loss = F.l1_loss(logits, y)
         return loss
@@ -85,7 +85,7 @@ class UnetModelModel(pl.LightningModule):
             batch (tuple): Tuple containing input images and ground truth (x, y)
             batch_idx (int): Index of the batch
         """
-        x, y = batch
+        x, y, _, _ = batch
         logits = self.model(x)
         loss = F.l1_loss(logits, y)
 
@@ -114,7 +114,7 @@ class UnetModelModel(pl.LightningModule):
             batch (tuple): Tuple containing input images and ground truth (x, y)
             batch_idx (int): Index of the batch
         """
-        x, y = batch
+        x, y, _, _ = batch
         logits = self(x)
         loss = F.l1_loss(logits, y)
 
@@ -122,8 +122,8 @@ class UnetModelModel(pl.LightningModule):
         self.psnr_test.update(logits, y)
         self.ssim_test.update(logits, y)
       
-        self.log("test_loss", loss, prog_bar=True)
-        self.log("nmse_test", nmse_test, prog_bar=True)
+        self.log("test_loss", loss, batch_size=x.size(0), prog_bar=True)
+        self.log("nmse_test", nmse_test, batch_size=x.size(0), prog_bar=True)
 
         return {'test_loss': loss,
                 'nmse_test': nmse_test,
@@ -142,7 +142,11 @@ class UnetModelModel(pl.LightningModule):
         self.ssim_test.reset()
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        return self(batch)
+        x, fname, slice_num = batch
+        pred = self(x)
+
+        return {'pred':pred, 'fname':fname, 'slice_num':slice_num}
+        
     
     def configure_optimizers(self):
         """
@@ -151,7 +155,7 @@ class UnetModelModel(pl.LightningModule):
         Returns:
             torch.optim.Optimizer
         """
-        if self.optimizer_name == "AdamW":
+        if self.hparams.optimizer_name == "AdamW":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
         else:
             optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
