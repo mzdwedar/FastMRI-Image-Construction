@@ -5,10 +5,11 @@ from omegaconf import DictConfig, OmegaConf
 import logging
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
-
+from hydra.utils import to_absolute_path
 from src.data import FastMRITransform, FastMRICustomDataset
 from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
-from hydra.utils import to_absolute_path
+import src.utils as utils
+
 
 def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
                 data_loader:DataLoader, run_id:str = None):
@@ -39,10 +40,12 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
-    data_path = to_absolute_path(cfg.trainer.predict.batch.data_path)
+    
+    data_path = to_absolute_path(cfg.trainer.eval.data_path)
     dataset = FastMRICustomDataset(data_path, transform=FastMRITransform(mask_func=None))
-    data_loader = DataLoader(dataset, batch_size=8, shuffle=False)
-    run_id = get_best_run_id(cfg)
+    data_loader = DataLoader(dataset, batch_size=8, num_workers=10, shuffle=False)
+
+    run_id = cfg.trainer.run_id if cfg.trainer.run_id else get_best_run_id(cfg)
     checkpoint_path = get_best_checkpoint(run_id)
     predictor = TorchPredictor.from_checkpoint(checkpoint_path)
 
@@ -52,6 +55,11 @@ def main(cfg: DictConfig):
     
     metrics = evaluate_fn(trainer, predictor, data_loader, run_id)
     
+    results_fp = cfg.trainer.EVAL_RESULTS_FILE
+
+    logger.info(json.dumps(metrics, indent=2))
+    if results_fp:  # pragma: no cover, saving results
+        utils.save_dict(metrics, results_fp)
     return metrics
 
 if __name__ == "__main__":
