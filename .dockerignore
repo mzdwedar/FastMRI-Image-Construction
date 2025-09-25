@@ -1,0 +1,7 @@
+__mycache__/
+
+.venv/
+data/
+*.tar.xz
+results/
+*.ckpt
