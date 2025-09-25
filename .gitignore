@@ -214,3 +214,10 @@ data/
 /mlruns
 
 /outputs
+
+lightning_logs/
+*.ckpt
+*.h5
+*.npy
+
+*.DS_Store
