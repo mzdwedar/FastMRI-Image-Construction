@@ -82,7 +82,7 @@ class FastMRICustomDataset(Dataset):
     PyTorch Dataset for FastMRI singlecoil .h5 files.
 
     - Indexes every slice in every file under the given root folder.
-    - Returns (kspace, target, fname, slice_num).
+    - Returns (kspace, target).
     - Designed to be used with a transform like FastMRITransform.
 
     Args:
@@ -90,13 +90,19 @@ class FastMRICustomDataset(Dataset):
         transform (callable, optional): Transform applied to (kspace, target, fname, slice_num).
     """
     def __init__(self, root: str, transform=None):
-        self.files = list_files(root, extension=".h5")
-
+        if os.path.isfile(root) and root.endswith(".h5"):
+            self.files = [root]
+        elif os.path.isdir(root):
+            self.files = list_files(root, extension=".h5")
+        else:
+            raise ValueError(f"Root {root} is not a valid file or directory")
+        
         self.examples = []
         for fname in self.files:
             with h5py.File(fname, "r") as hf:
                 num_slices = hf["kspace"].shape[0]
                 self.examples += [(fname, slice_num) for slice_num in range(num_slices)]
+        
         self.transform = transform
         logging.info(f"Loaded {len(self.examples)} slices from {len(self.files)} files (path: {root})")
 
@@ -126,9 +132,9 @@ class FastMRICustomDataset(Dataset):
         target = torch.from_numpy(target).float() if target is not None else None
 
         if self.transform is not None:
-            return self.transform(kspace, target)
+            return self.transform(kspace, target, fname, slice_num)
 
-        return kspace, target
+        return kspace, target, fname, slice_num
 
 # FFT utilities
 def fft2c(img: torch.Tensor) -> torch.Tensor:
@@ -190,8 +196,9 @@ class FastMRITransform:
         mask_func (callable, optional): Function that generates an undersampling 
                                         mask given a k-space shape. Defaults to None.
     """
-    def __init__(self, mask_func=None):
+    def __init__(self, mask_func=None, crop_size=(320, 320)):
         self.mask_func = mask_func
+        self.crop_size = crop_size
 
     def __call__(self, kspace: torch.Tensor, target: torch.Tensor, fname: str, slice_num: int):
         """
@@ -210,21 +217,35 @@ class FastMRITransform:
                 fname (str): Source filename.
                 slice_num (int): Slice index.
         """
-        # Apply undersampling mask if provided
+        # Ensure (1, H, W) for singlecoil
+        if kspace.ndim == 2:
+            kspace = kspace[None, ...]
+
         if self.mask_func is not None:
-            mask = self.mask_func(kspace.shape)
+            mask, _ = self.mask_func(kspace.shape, seed=None)
             kspace = kspace * mask
 
-        # Inverse FFT to image domain
         image = ifft2c(kspace)
-        image = torch.abs(image)  # magnitude image
+        image = torch.abs(image)
 
-        # Normalize input and target to [0,1]
         image = normalize(image)
         if target is not None:
             target = normalize(target)
 
-        return image, target
+        # Add channel dimension
+        if image.ndim == 2:
+            image = image.unsqueeze(0)
+        if target is not None and target.ndim == 2:
+            target = target.unsqueeze(0)
+        
+        image = complex_center_crop(image, self.crop_size)
+        if target is not None:
+            target = complex_center_crop(target, self.crop_size)
+
+        if target is not None:
+            return image, target, fname, slice_num
+        else:
+            return image, fname, slice_num
 
 class FastMRIDataModule(pl.LightningDataModule):
     """
