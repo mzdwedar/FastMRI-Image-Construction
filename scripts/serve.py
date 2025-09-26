@@ -50,12 +50,6 @@ class ModelDeployment:
                       devices=self.cfg.trainer.gpus
                     )
         os.makedirs('results', exist_ok=True)
-        # print("MLflow tracking URI:", self.cfg.trainer.MLFLOW_TRACKING_URI)
-        # mlflow.set_tracking_uri(self.cfg.trainer.MLFLOW_TRACKING_URI)
-
-        
-        # best_checkpoint = get_best_checkpoint(run_id=run_id)
-        # best_checkpoint = os.path.join('./mlruns', experiment_id, run_id, 'artifacts/checkpoints')
         self.predictor = TorchPredictor.from_checkpoint(checkpoint_path)
         self.inference_monitor = inferenceMonitor()
 
