@@ -1,36 +1,28 @@
 import json
-from http import HTTPStatus
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, Response
-import tempfile
-import traceback
-from PIL import Image
-from pydantic import BaseModel
-import mlflow
 import argparse
-import uvicorn
-from omegaconf import OmegaConf
-from torch.utils.data import DataLoader
-from pytorch_lightning import Trainer
 import os
-import io
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Gauge
-import psutil
-import threading
-import time
 from typing import List
-import numpy as np
-import h5py
+import threading
+import traceback
 from collections import defaultdict
 from pathlib import Path
-from prometheus_client import Histogram
 from time import perf_counter
-
-
-from scripts.predict import predict_fn, TorchPredictor, get_best_checkpoint
+import tempfile
+import h5py
+from omegaconf import OmegaConf
+import numpy as np
+from torch.utils.data import DataLoader
+from pytorch_lightning import Trainer
+import uvicorn
+from http import HTTPStatus
+from pydantic import BaseModel
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import FileResponse, Response
+from prometheus_fastapi_instrumentator import Instrumentator
+from scripts.predict import predict_fn, TorchPredictor
 from scripts.evaluate import evaluate_fn
 from src.data import FastMRITransform, FastMRICustomDataset
+from monitoring.monitor_metrics import inferenceMonitor, hardwareMonitor
 
 
 app = FastAPI(
@@ -38,34 +30,6 @@ app = FastAPI(
     description="Serve a model with FastAPI",
     version="0.1",
 )
-
-# Metrics
-predict_requests_total = Counter("predict_requests_total", "Total number of predict requests")
-evaluate_requests_total = Counter("evaluate_requests_total", "Total number of evaluate requests")
-# Hardware/process metrics
-host_cpu_percent = Gauge("host_cpu_percent", "Host CPU percent")
-host_mem_percent = Gauge("host_mem_percent", "Host memory percent")
-process_rss_bytes = Gauge("process_rss_bytes", "App process RSS bytes")
-
-inference_latency = Histogram(
-    "predict_inference_latency_seconds",
-    "Time spent in model.predict() for /predict endpoint",
-    buckets=(0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10)  # 10ms → 10s
-)
-
-def sample_hw_metrics() -> None:
-    process = psutil.Process()
-    # Prime cpu_percent to avoid initial 0.0
-    psutil.cpu_percent(interval=None)
-    while True:
-        try:
-            host_cpu_percent.set(psutil.cpu_percent(interval=None))
-            host_mem_percent.set(psutil.virtual_memory().percent)
-            process_rss_bytes.set(process.memory_info().rss)
-        except Exception:
-            # Do not crash the sampler; just continue
-            pass
-        time.sleep(5)
 
 
 class PredictRequest(BaseModel):
@@ -93,14 +57,20 @@ class ModelDeployment:
         # best_checkpoint = get_best_checkpoint(run_id=run_id)
         # best_checkpoint = os.path.join('./mlruns', experiment_id, run_id, 'artifacts/checkpoints')
         self.predictor = TorchPredictor.from_checkpoint(checkpoint_path)
+        self.inference_monitor = inferenceMonitor()
 
     async def predict(self, data_loader: DataLoader):
-        
+        self.inference_monitor.increment_predict_count()
+
+        start = perf_counter()
         predictions = predict_fn(self.trainer, data_loader, self.predictor)
+        duration = perf_counter() - start
+        self.inference_monitor.observe_latency(duration=duration)
 
         return predictions
 
     async def evaluate(self, dataloader: DataLoader):
+        self.inference_monitor.increment_evaluate_count()
         metrics = evaluate_fn(self.trainer, self.predictor, dataloader)
 
         return metrics
@@ -118,8 +88,6 @@ def health():
 
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
-    predict_requests_total.inc()
-
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as temp_file:
         content = await file.read()
@@ -129,19 +97,14 @@ async def predict(file: UploadFile = File(...)):
     try:
         dataset = FastMRICustomDataset(temp_file_path, transform=FastMRITransform(mask_func=None))
         data_loader = DataLoader(dataset, shuffle=False)
-         
-        start = perf_counter()
+        
         output = await model.predict(data_loader)
-        duration = perf_counter() - start
-        inference_latency.observe(duration)
-
+        
         pred_by_file = defaultdict(list)
         for out_slice in output:
             full_path_fname = out_slice['fname'][0]
             pred_by_file[full_path_fname].append((out_slice['slice_num'].item(), out_slice['pred'].cpu().numpy()))
 
-        # print(f"DEBUG: {pred_by_file}")
-        print(f"DEBUG: filename: {pred_by_file.keys()}")
 
         for full_path_fname, slices in pred_by_file.items():
             slices.sort(key=lambda x: x[0])  # Sort by slice number
@@ -194,7 +157,7 @@ async def predict(file: UploadFile = File(...)):
 
 @app.post("/evaluate/")
 async def evaluate(request: EvaluateRequest):
-    evaluate_requests_total.inc()
+    
     files = request.files
     temp_files = []
     
@@ -262,7 +225,8 @@ async def evaluate(request: EvaluateRequest):
 Instrumentator().instrument(app).expose(app)
 
 # Start background hardware metrics sampler
-threading.Thread(target=sample_hw_metrics, daemon=True).start()
+hardware_monitor = hardwareMonitor()
+threading.Thread(target=hardware_monitor.sample, daemon=True).start()
 
 
 if __name__ == "__main__":
