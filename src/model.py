@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 from torchmetrics.image import PeakSignalNoiseRatio
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
+
 from .utils import nmse
 
 class UnetModel(pl.LightningModule):
@@ -31,7 +32,7 @@ class UnetModel(pl.LightningModule):
                 "dropout": dropout,
             }
         )
-        
+
         self.model = Unet(
             in_chans=1,
             out_chans=1,
@@ -160,4 +161,12 @@ class UnetModel(pl.LightningModule):
         else:
             optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
 
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+
+        return {"optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val_loss",
+                    "interval": "epoch",
+                    "frequency": 1
+                }}
