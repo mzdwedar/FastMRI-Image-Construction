@@ -1,0 +1,47 @@
+name: "fastmri_image_construction"          # Name of the model
+platform: "pytorch_libtorch"             # Framework the model is in
+default_model_name="model.pt" 
+default_model_version: 1              # Select default model version
+
+
+
+input [                               # Defining input layer conf
+  {
+    name: "input_tensor"              # Input tensor name
+    data_type: TYPE_FP32              # Expected input datatype
+    format: FORMAT_NCHW              # Expected tensor format
+    dims: [ -1, 1, 320, 320 ]             # Input tensor dims
+  }
+]
+output [                              # Defining output layer conf
+  {
+    name: "output_tensor"             # Output tensor name
+    data_type: TYPE_FP32              # Output tensor datatype
+    dims: [ -1, 1, 320, 320 ]                    # Output tensor dims
+  }
+]
+
+
+version_policy {                      # Specify versions we have
+    specific {
+        versions: [1]
+    }
+}
+
+
+instance_group {
+    { 
+        kind: KIND_GPU, 
+        count: 1 
+    } 
+}
+
+max_batch_size: 4                     # Model handles 4 request/a time
+
+dynamic_batching {
+  max_queue_delay_microseconds: 100   # wait up to 100µs to form a batch
+  preserve_ordering: true             # ensures FIFO response order
+}
+
+response_cache { enable: true }
+
