@@ -1,0 +1,13 @@
+triton:
+  model_name: "fastmri_image_construction"
+  
+  inputs:
+    name: "input_tensor"
+    dtype: "FP32"
+
+  outputs:
+    name: "output_tensor"
+    dtype: "FP32"
+
+  model_version: "1"
+  server_url: ${oc.env:triton_server_url, "localhost:8000" }
