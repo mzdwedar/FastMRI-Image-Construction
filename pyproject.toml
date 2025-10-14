@@ -5,7 +5,6 @@ description = "MRI reconstruction with FastMRI and PyTorch"
 readme = "README.md"
 requires-python = "==3.10.*"
 
-# Core dependencies
 dependencies = [
     "segmentation-models-pytorch==0.3.3",
     "fastapi>=0.111.0",
@@ -26,7 +25,7 @@ dependencies = [
     "onnxscript>=0.5.3",
 ]
 
-[tool.uv.dependency-groups]
+[project.optional-dependencies]
 dev = [
     "torchsummary>=1.5.1",
     "torchinfo>=1.8.0",
@@ -48,16 +47,36 @@ gpu = [
     "onnxruntime-gpu==1.17.3",
 ]
 
-
 prod = [
     "gunicorn>=21.2.0",
     "uvicorn[standard]>=0.30.0",
 ]
 
+triton = [
+    "tritonclient[all]>=2.45.0",
+    "httpx>=0.27.0",
+    "grpcio>=1.60.0",
+    "protobuf>=5.27.0"
+]
+
+[tool.uv.sources]
+torch = [
+    { index="torch-cpu", extra="cpu" },
+    { index="torch-gpu", extra="gpu" }
+]
+
+[[tool.uv.index]]
+name = "torch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+
+[[tool.uv.index]]
+name = "torch-gpu"
+url = "https://download.pytorch.org/whl/cu124"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
-
-# USAGE: 
-# uv sync --extra dev --extra cpu
-# uv lock --extra cpu --output requirements-cpu.lock
