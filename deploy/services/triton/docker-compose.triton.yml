@@ -1,0 +1,21 @@
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.03-py3
+    # runtime: nvidia
+    shm_size: '1gb'
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [cpu]
+
+    volumes:
+      - ../../../triton_models:/models
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    
+    command: ["tritonserver", "--model-repository=/models"]
