@@ -22,7 +22,7 @@ dependencies = [
     "fastmri>=0.3.0",
     "onnx>=1.19.0",
     "onnxruntime==1.17.3",
-    "onnxscript>=0.5.3",
+    "onnxscript>=0.5.3"
 ]
 
 [project.optional-dependencies]
@@ -34,18 +34,14 @@ dev = [
     "ruff>=0.5.0",
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
-    "ipython>=8.0.0",
+    "ipython>=8.0.0"
 ]
 
 cpu = [
     "torch==2.3.1",
-    "onnxruntime==1.17.3",
+    "onnxruntime==1.17.3"
 ]
 
-gpu = [
-    "torch==2.3.1+cu124",
-    "onnxruntime-gpu==1.17.3",
-]
 
 prod = [
     "gunicorn>=21.2.0",
@@ -53,8 +49,7 @@ prod = [
 ]
 
 triton = [
-    "tritonclient[all]>=2.45.0",
-    "httpx>=0.27.0",
+    "tritonclient[grpc,http]>=2.45.0",
     "grpcio>=1.60.0",
     "protobuf>=5.27.0"
 ]
@@ -62,19 +57,16 @@ triton = [
 [tool.uv.sources]
 torch = [
     { index="torch-cpu", extra="cpu" },
-    { index="torch-gpu", extra="gpu" }
 ]
 
 [[tool.uv.index]]
 name = "torch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 
-[[tool.uv.index]]
-name = "torch-gpu"
-url = "https://download.pytorch.org/whl/cu124"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+override-dependencies = ["perf-analyzer==0"]
 
 
 [tool.pytest.ini_options]

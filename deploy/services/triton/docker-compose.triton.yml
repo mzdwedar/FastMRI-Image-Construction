@@ -1,15 +1,15 @@
 services:
   triton:
     image: nvcr.io/nvidia/tritonserver:24.03-py3
-    runtime: nvidia
+    # runtime: nvidia
     shm_size: '1gb'
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [cpu]
 
     volumes:
       - ../../../triton_models:/models

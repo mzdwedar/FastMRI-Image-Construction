@@ -1,12 +1,14 @@
 triton:
-  model_name: "fastmri_image_construction"
+  model_name: "unet_model"
   
+  image_path: file1000260.h5
+
   inputs:
-    name: "input_tensor"
+    name: "input"
     dtype: "FP32"
 
   outputs:
-    name: "output_tensor"
+    name: "output"
     dtype: "FP32"
 
   model_version: "1"
