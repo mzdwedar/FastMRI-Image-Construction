@@ -17,12 +17,14 @@ def main(cfg: DictConfig):
                 data,
                 batch_size=16,
                 shuffle=False,
-                num_workers=10,
+                num_workers=cfg.datamodule.num_workers,
                 persistent_workers=False
             )
     # Define the Client connection
     client = httpclient.InferenceServerClient(url=cfg.triton.server_url)
-
+    
+    all_batch_outputs = []
+    
     for batch in dataloader:
         
         if len(batch) == 4:
@@ -35,14 +37,19 @@ def main(cfg: DictConfig):
         images_np = images.numpy().astype(np.float32)
         
         input_shape = images_np.shape
-        infer_input = httpclient.InferInput(cfg.triton.input.name, input_shape, "FP32")
+        infer_input = httpclient.InferInput(cfg.triton.inputs.name, input_shape, "FP32")
         infer_input.set_data_from_numpy(images_np)
 
         res = client.infer(cfg.triton.model_name, model_version=cfg.triton.model_version, inputs=[infer_input])
 
-        output = res.as_numpy(cfg.triton.model_output_name)
-        output = np.squeeze(output)
+        output = res.as_numpy(cfg.triton.outputs.name)
+        output = np.squeeze(output) 
 
+        all_batch_outputs.append(output)
+    
+    all_outputs = np.concatenate(all_batch_outputs, axis=0)
+
+    return all_outputs
 
 if __name__ == "__main__":
     main() # pylint: disable=no-value-for-parameter
