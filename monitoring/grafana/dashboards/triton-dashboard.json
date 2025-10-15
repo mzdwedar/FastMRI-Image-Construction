@@ -1,0 +1,32 @@
+{
+  "id": null,
+  "uid": "triton-basic",
+  "title": "Triton Inference Metrics",
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Inference Requests per Second",
+      "targets": [
+        {
+          "expr": "rate(nv_inference_request_success[1m])",
+          "legendFormat": "Requests/sec",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Average Inference Latency (μs)",
+      "targets": [
+        {
+          "expr": "avg(nv_inference_request_duration_us)",
+          "legendFormat": "Avg Latency",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

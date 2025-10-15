@@ -2,7 +2,7 @@
 FROM nvcr.io/nvidia/tritonserver:24.05-py3
 
 # Copy models into container
-COPY ../../../triton_models /models
+COPY ./models /models
 
 # Copy pyproject.toml and optional poetry.lock or requirements.txt
 COPY pyproject.toml /app/
