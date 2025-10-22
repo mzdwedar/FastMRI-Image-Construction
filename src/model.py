@@ -1,10 +1,9 @@
 import torch
 import torch.nn.functional as F
-from fastmri.models.unet import Unet
 import pytorch_lightning as pl
 from torchmetrics.image import PeakSignalNoiseRatio
 from torchmetrics.image import StructuralSimilarityIndexMeasure
-
+import segmentation_models_pytorch as smp
 
 from .utils import nmse
 
@@ -33,14 +32,14 @@ class UnetModel(pl.LightningModule):
             }
         )
 
-        self.model = Unet(
-            in_chans=1,
-            out_chans=1,
-            chans=num_chans,
-            num_pool_layers=num_pools,
-            drop_prob=dropout,
+        self.model = smp.Unet(
+                encoder_name="resnet18",
+                encoder_weights=None,
+                in_channels=1,
+                classes=1,
+                decoder_dropout=dropout,
         )
-
+        
         # Metrics for validation
         self.psnr = PeakSignalNoiseRatio(data_range=1.0)
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0)

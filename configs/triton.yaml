@@ -1,0 +1,15 @@
+triton:
+  model_name: "unet_model"
+  
+  image_path: file1000260.h5
+
+  inputs:
+    name: "input"
+    dtype: "FP32"
+
+  outputs:
+    name: "output"
+    dtype: "FP32"
+
+  model_version: "1"
+  server_url: ${oc.env:triton_server_url, "localhost:8000" }

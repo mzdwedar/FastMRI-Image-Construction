@@ -1,0 +1,44 @@
+name: "unet_model"          # Name of the model
+platform: "onnxruntime_onnx"             # Framework the model is in
+
+input [
+  {
+    name: "input"
+    data_type: TYPE_FP32
+    format: FORMAT_NCHW
+    dims: [1, 320, 320]  # H, W, C
+  }
+]
+
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [1, 320, 320]
+  }
+]
+
+
+version_policy {                      # Specify versions we have
+    specific {
+        versions: [1]
+    }
+}
+
+
+instance_group [
+    { 
+        kind: KIND_CPU, 
+        count: 1 
+    } 
+]
+
+max_batch_size: 20                     # Model handles 4 request/a time
+
+dynamic_batching {
+  max_queue_delay_microseconds: 100   # wait up to 100µs to form a batch
+  preserve_ordering: true             # ensures FIFO response order
+}
+
+response_cache { enable: true }
+

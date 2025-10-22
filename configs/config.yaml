@@ -2,3 +2,4 @@ defaults:
   - model
   - datamodule
   - trainer
+  - triton

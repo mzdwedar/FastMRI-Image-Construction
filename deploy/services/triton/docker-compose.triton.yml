@@ -1,0 +1,49 @@
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.03-py3
+    # runtime: nvidia
+    shm_size: '1gb'
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [cpu]
+
+    volumes:
+      - ../../../triton_models:/models
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    
+    command: ["tritonserver", "--model-repository=/models"]
+
+  
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: triton-prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml --web.enable-lifecycle
+    volumes:
+      - ../../../monitoring/prometheus.triton.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: triton-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    volumes:
+      - ../../../monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ../../../monitoring/grafana/provisioning:/etc/grafana/provisioning
+
+volumes:
+  prometheus_data:
+  grafana_data:
