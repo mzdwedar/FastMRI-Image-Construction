@@ -1,7 +1,6 @@
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 import psutil
 import time
-from prometheus_client import Histogram
 
 
 class inferenceMonitor:
@@ -23,7 +22,9 @@ class inferenceMonitor:
                                     documentation="Time spent in model.predict() for /predict endpoint",
                                     buckets=(0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10)  # 10ms → 10s
                                     )
-    
+        
+        self.inference_throughput = Gauge("inference_throughput_samples_per_second", "Inference throughput in samples/second")
+
     def increment_predict_count(self) -> None:
         """
         Increment the inference counter by one.
@@ -55,6 +56,22 @@ class inferenceMonitor:
             None
         """
         self.inference_latency.observe(duration)
+
+    def observe_throughput(self, num_samples: int, duration: float) -> None:
+        """
+        Observe and record the throughput of an inference operation.
+        Args:
+            num_samples (int): The number of samples processed during the inference operation.
+            duration (float): The time taken for the inference operation in seconds.
+            
+        ---
+        Returns:
+            None
+        """
+        if duration > 0:
+            throughput = num_samples / duration
+            self.inference_throughput.set(throughput)
+
 
 class hardwareMonitor:
     """Class representing a hardware monitor that tracks CPU and memory usage."""

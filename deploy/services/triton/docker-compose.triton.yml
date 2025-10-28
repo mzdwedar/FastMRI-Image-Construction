@@ -1,29 +1,33 @@
 services:
   triton:
     image: nvcr.io/nvidia/tritonserver:24.03-py3
-    # runtime: nvidia
     shm_size: '1gb'
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [cpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [cpu]
 
+    command: ["tritonserver", "--model-repository=/models", "--log-verbose=1"]
     volumes:
-      - ../../../triton_models:/models
+      - triton_models:/models
     ports:
       - "8000:8000"
       - "8001:8001"
       - "8002:8002"
-    
-    command: ["tritonserver", "--model-repository=/models"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: triton-prometheus
+    restart: always
     command: --config.file=/etc/prometheus/prometheus.yml --web.enable-lifecycle
     volumes:
       - ../../../monitoring/prometheus.triton.yml:/etc/prometheus/prometheus.yml:ro
@@ -33,16 +37,18 @@ services:
   grafana:
     image: grafana/grafana:11.1.4
     container_name: triton-grafana
+    restart: always
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_PASSWORD}
     depends_on:
       - prometheus
     volumes:
-      - ../../../monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-      - ../../../monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+      - ../../../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
 
 volumes:
   prometheus_data:
