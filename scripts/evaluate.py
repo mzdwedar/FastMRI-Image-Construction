@@ -7,8 +7,9 @@ from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from hydra.utils import to_absolute_path
 from src.data import FastMRITransform, FastMRICustomDataset
+from scripts import utils
 from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
-import src.utils as utils
+from .config import logger
 
 
 def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
@@ -32,11 +33,8 @@ def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
         "overall": test_metrics
     }
 
-    logger.info(json.dumps(metrics, indent=4))
-
     return metrics
 
-logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
