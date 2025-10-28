@@ -1,94 +1,354 @@
-# fastmri
+# fastmri-knee: End-to-End MRI Reconstruction and Serving
 
-## Introduction
-This repository contains an end-to-end workflow for deep learning on knee MRI data: training, evaluation, and serving a FastAPI inference service with production-friendly monitoring (Prometheus + Grafana). It uses modern Python packaging (`uv`), Hydra-style configs, and ML experiment tracking.
+## 1. Project Title & Description
+An end-to-end pipeline for knee MRI reconstruction using PyTorch Lightning. The repo covers training, evaluation, batch inference, and two serving options (FastAPI and NVIDIA Triton), with production-ready monitoring via Prometheus and Grafana. Config is managed with Hydra; experiments and artifacts are tracked with MLflow.
 
-## Project objective
-- Train a model on provided knee MRI datasets and log runs/artifacts.
-- Serve trained checkpoints via a FastAPI endpoint for real-time inference.
-- Expose operational and application metrics for observability and troubleshooting.
+## 2. Overview / Motivation
+- Provide a reproducible baseline for knee MRI reconstruction on FastMRI-style HDF5 data.
+- Offer batteries-included infrastructure: config management, experiment tracking, serving, and monitoring.
+- Demonstrate both Python-native serving (FastAPI) and high-performance model serving (Triton) patterns.
 
-## Architecture
+## 3. Architecture / Pipeline Overview
 ```mermaid
-graph TD
-  A[Raw MRI data HDF5] --> B[DataModule / Dataloaders]
-  B --> C[Model training using Pytorch Lightning]
-  C --> D[Checkpoints & artifacts]
-  D --> E[Serving via FastAPI]
-  E --> F[Clients]
-  E -->|/metrics| G[Prometheus]
-  G --> H[Grafana Dashboards]
+graph TB
+  subgraph Data
+    A[Raw MRI HDF5 files]
+    B[Data split: train/val/test]
+  end
+
+  subgraph ML Pipeline
+    C[DataModule: loading + transforms]
+    D[UNet model]
+    E[Training: PL Trainer + MLflow]
+    F[Checkpoints: mlruns/artifacts/checkpoints]
+    G[Evaluation + Metrics]
+    H[Batch Prediction: write volumes]
+  end
+
+  subgraph Serving
+    I[FastAPI service]
+    J[Triton Inference Server]
+  end
+
+  subgraph Observability
+    K[Prometheus scrape]
+    L[Grafana dashboards]
+  end
+
+  A --> B --> C --> D --> E --> F
+  F --> G
+  F --> H
+  F --> I
+  F --> J
+  I -- expose /metrics --> K --> L
+  J -- expose /metrics --> K
 ```
 
-Request flow (serving):
+Request flow (FastAPI):
 ```mermaid
 sequenceDiagram
   participant Client
-  participant API as FastAPI Service
-  participant Model as Loaded Checkpoint
+  participant API as FastAPI
+  participant Model as PL Checkpoint
   participant Mon as Prometheus
-
-  Client->>API: POST /predict (payload)
+  Client->>API: POST /predict (Upload .h5)
   API->>Model: Preprocess + forward
-  Model-->>API: Output (reconstruction/score)
-  API-->>Client: JSON response
-  API-->>Mon: Update counters/histograms at /metrics
+  Model-->>API: Slices -> volume
+  API-->>Client: HDF5 with pred
+  API-->>Mon: Counters + latency histograms
 ```
 
-## Dataset Access
-This project uses the FastMRI dataset for knee MRI reconstruction. To access the dataset:
+## 4. Features
+- Training with PyTorch Lightning and Hydra configs.
+- MLflow experiment tracking and checkpoint artifact logging.
+- Batch evaluation and prediction utilities.
+- Two serving options: FastAPI and Triton.
+- Prometheus metrics and Grafana dashboards for latency/health.
 
-1. **Register and download**: Visit the [FastMRI official website](https://fastmri.org/) and register for access
-2. **Download knee data**: Download the knee single-coil validation set (knee_singlecoil_val.tar.xz)
-3. **Extract and organize**: Place training/validation HDF5 files in the appropriate directories:
-   - Training data: `data/train/`
-   - Validation data: `data/val/`
-4. **Alternative datasets**: The code can be adapted for other MRI datasets by modifying the data loading configuration in `configs/datamodule.yaml`
+## 5. Dataset / Data Sources
+This project targets the FastMRI knee single-coil dataset. Acquire data from the FastMRI site.
 
-**Note**: The dataset contains anonymized knee MRI scans in HDF5 format, with both fully-sampled and undersampled k-space data for training reconstruction models.
+- Place files as:
+  - `data/train/*.h5`
+  - `data/val/*.h5`
+  - `data/test/*.h5` (optional)
 
-## How to run
-- Dependencies (use `uv`):
-  
-    ``uv sync``
+You can adapt to other datasets by modifying `configs/datamodule.yaml` and the `src/data.py` dataset/transform logic.
 
-- Prepare data:
-  Place training/validation HDF5 files under `data/train` and `data/val`. Adjust paths in `configs/datamodule.yaml` if needed.
+## 6. Data Preprocessing
+`src/data.py` defines `FastMRICustomDataset` and `FastMRITransform` that read HDF5, apply optional masks, and return tensors for the UNet. Random undersampling masks are controlled in code and configs.
 
-- Train:
-  
-  ``python scripts/train.py --config configs/config.yaml``
+## 7. Feature Engineering
+MRI-specific preprocessing focuses on k-space undersampling and image normalization rather than classic tabular feature engineering. Extend `FastMRITransform` for domain-specific augmentations if needed.
 
-- Evaluate:
-  python scripts/evaluate.py --run_id <RUN_ID>
+## 8. Model Architecture / Approach
+- UNet-based architecture defined in `src/model.py` with configurable channels/pools (`configs/model.yaml`).
+- Loss/metrics (e.g., PSNR) tracked via PyTorch Lightning.
 
-- Local serving (FastAPI):
-  
-  ``python scripts/serve.py --run_id <RUN_ID> --host 0.0.0.0 --port 8000``
+## 9. Training
+Dependencies (uv):
 
-- Docker (serve only): <br>
-  * ``bash docker build -t fastmri-serve .`` <br>
-  * `` docker run --rm -p 8000:8000 fastmri-serve``
-  * ``python scripts/serve.py --run_id <RUN_ID> --host 0.0.0.0 --port 8000``
+```bash
+uv sync
+```
 
-- Monitoring (Prometheus + Grafana):<br>
-  * ``uv sync`` <br>
-  * ``docker compose up -d --build``
-  
-  ### Prometheus: http://localhost:9090
-  ### Grafana: http://localhost:3000 (admin/admin)
-  ## metrics: 
-    * http requests count
-    * hardware metrics (cpu, memory, process)
+Run training with Hydra config:
 
-  # Tear down:
-  docker compose down
+```bash
+python scripts/train.py
+```
 
-  ## Grafana Dashboard
-  ![Grafana Latency](grafana_latency.png)
+Key training config knobs (`configs/trainer.yaml`):
+- accelerator/devices: GPU or CPU, number of devices
+- max_epochs, batch_size
+- optimizer and scheduler params
+- checkpointing: monitor metric, mode, save_top_k
+- MLflow tracking URI and experiment name
 
-## Pitfalls
-- Splitting validation set incorrectly can cause data leakage. Keep patient/series-level splits consistent.
-- Ensure the `--run_id` corresponds to a checkpoint available locally (e.g., under `mlflow_artifacts/checkpoints`); otherwise serving will fail to load weights.
-- GPU/CPU memory: batch size and patch size may need tuning for your hardware.
-- Port conflicts: change `--port` or stop other services using 8000/9090/3000.
+Data config (`configs/datamodule.yaml`):
+- `data_root`, `train_root`, `val_root`, `test_root`
+- `batch_size`, `num_workers`
+
+Model config (`configs/model.yaml`):
+- `num_chans`, `num_pools`, `dropout`
+
+Artifacts and metrics are logged under `mlruns/` (local file store by default).
+
+## 10. Hyperparameter Tuning
+Skeleton support in `configs/trainer.yaml` under `trainer.tune` with `n_trials` and `timeout`. Integrate your preferred tuner (Optuna, Ray Tune) by extending `scripts/tune.py`.
+
+
+## 11. Evaluation
+Evaluate a trained checkpoint on a validation folder:
+
+```bash
+# uses cfg.trainer.eval.data_path (defaults to ./data/val)
+python scripts/evaluate.py
+```
+
+Notes:
+- If `cfg.trainer.run_id` is unset, the script auto-selects the best MLflow run via the configured metric.
+- Results are printed and optionally saved to `trainer.EVAL_RESULTS_FILE` if provided.
+
+## 12. Results / Visualizations
+- Metrics CSV and hyperparams are stored under `lightning_logs/` and `mlruns/`.
+- A sample Grafana panel `grafana_latency.png` shows serving latency distribution when FastAPI is instrumented.
+
+## 13. Inference / Prediction
+Batch prediction to write volumes per file:
+
+```bash
+# data path from cfg.trainer.predict.data_path (default: ./data/test)
+python scripts/predict.py
+```
+
+Outputs are saved under `trainer.PREDICTIONS_DIR` (defaults to `data/outputs/${run_id}/`).
+
+## 14. Deployment
+Two serving modes are supported:
+
+- FastAPI (Python-native server, Prometheus-instrumented)
+- NVIDIA Triton (high-performance model server)
+
+See details below.
+
+## 15. Experiment Tracking
+MLflow is used via the Lightning logger. By default, the tracking URI uses a local file store:
+
+```yaml
+trainer:
+  MLFLOW_TRACKING_URI: 'file:${project_root}/mlruns'
+  train:
+    experiment_name: fastmri
+```
+
+Checkpoints are logged to run artifacts under `mlruns/<exp_id>/<run_id>/artifacts/checkpoints/`.
+
+## 16. Model Versioning & Reproducibility
+- Runs are versioned via MLflow `experiment_name` and `run_id`.
+- Checkpoints are stored per run; `scripts.predict.get_best_checkpoint` selects the best in the `checkpoints` subdir.
+- Random seeds are set via `trainer.seeds`.
+
+## 17. Configuration
+Hydra root config: `configs/config.yaml` with defaults to `model`, `datamodule`, `trainer`, and `triton`.
+
+Common overrides (environment-aware):
+
+```bash
+# examples
+python scripts/train.py trainer.train.max_epochs=10 datamodule.batch_size=8
+
+# or via env vars (see configs/trainer.yaml)
+export batch_size=8
+python scripts/train.py
+```
+
+Key files:
+- `configs/trainer.yaml`
+- `configs/datamodule.yaml`
+- `configs/model.yaml`
+- `configs/triton.yaml`
+
+## 18. Project Structure
+```
+├─ configs/
+│  ├─ config.yaml              # Hydra defaults
+│  ├─ trainer.yaml             # Training/eval/predict params
+│  ├─ datamodule.yaml          # Data paths + loader settings
+│  └─ model.yaml               # UNet hyperparams
+├─ deploy/
+│  └─ services/
+│     ├─ fastapi/              # FastAPI app, schemas, Docker compose
+│     └─ triton/               # Triton compose, model repo config
+├─ scripts/
+│  ├─ train.py                 # Train entrypoint
+│  ├─ evaluate.py              # Eval entrypoint
+│  ├─ predict.py               # Batch inference entrypoint
+│  ├─ predict_fastapi.py       # Client for FastAPI /predict
+│  ├─ predict_triton.py        # Client for Triton
+│  └─ convert_to_onnx.py       # Export ONNX for Triton
+├─ src/
+│  ├─ data.py                  # Dataset + transforms
+│  ├─ model.py                 # LightningModule: UNet wrapper
+│  └─ resnet.py                # (optional) model variant
+├─ monitoring/
+│  ├─ prometheus.yml           # FastAPI scrape config
+│  ├─ prometheus.triton.yml    # Triton scrape config
+│  └─ grafana/                 # Provisioning + dashboards
+├─ mlruns/                     # MLflow local tracking
+└─ data/                       # train/val/test splits
+```
+
+
+## 19. Testing
+Run tests (where available):
+
+```bash
+pytest -q
+```
+
+## 20. Reproducibility / Environment
+- Managed via `uv` with lockfile `uv.lock`.
+- Determinism: seeds (see `trainer.seeds`) and controlled dataloading.
+- Hardware: supports CPU/GPU; Apple Silicon (MPS) is detected in ONNX export.
+
+
+
+## 21. FAQ / Troubleshooting
+- Port conflicts: change FastAPI port 8000, Prometheus 9090, Grafana 3000.
+- Run ID not found: ensure MLflow runs exist and checkpoints saved.
+- GPU not used: set `trainer.accelerator=gpu` and `trainer.gpus=1`.
+
+---
+
+### Detailed How-To
+
+#### Get Data
+1) Register and download from FastMRI.
+2) Extract files into `data/train`, `data/val`, and optionally `data/test`.
+3) Verify `configs/datamodule.yaml` paths.
+
+#### Train
+```bash
+uv sync
+python scripts/train.py --config configs/config.yaml \
+  trainer.train.max_epochs=1 datamodule.batch_size=16
+```
+
+#### Evaluate
+```bash
+python scripts/evaluate.py --config configs/config.yaml \
+  trainer.eval.data_path=./data/val
+```
+
+#### Batch Predict
+```bash
+python scripts/predict.py --config configs/config.yaml \
+  trainer.predict.data_path=./data/test
+```
+
+### Serving Option 1: FastAPI
+Endpoints:
+- `GET /health/`
+- `POST /predict/` (multipart form with single `.h5` under field `file`)
+- `POST /evaluate/` (multipart with multiple `.h5` files under field `files`)
+- `GET /metrics` (Prometheus)
+
+Run locally (direct module):
+
+```bash
+# Important: pass the checkpoint path argument
+python -m deploy.services.fastapi.main --checkpoint_path <PATH_TO_CKPT> \
+  --host 0.0.0.0 --port 8000
+```
+
+Client example:
+
+```bash
+python scripts/predict_fastapi.py  # edit file_path inside the script
+```
+
+With Prometheus + Grafana via compose in this repo directory:
+
+```bash
+docker compose -f deploy/services/fastapi/docker-compose.yml up -d --build \
+  --env-file <(printf 'checkpoint_path=%s\n' "<PATH_TO_CKPT>")
+
+# Prometheus: http://localhost:9090
+# Grafana:    http://localhost:3000  (admin/admin)
+```
+
+Tear down:
+
+```bash
+docker compose -f deploy/services/fastapi/docker-compose.yml down
+```
+
+Notes:
+- The FastAPI app instruments default HTTP metrics via `prometheus_fastapi_instrumentator`.
+- Checkpoint path must be accessible in the container if using Docker (use bind mounts or bake into image).
+
+### Serving Option 2: Triton
+1) Export ONNX from a trained checkpoint:
+
+```bash
+python scripts/convert_to_onnx.py  # adjust checkpoint path inside script
+```
+
+2) Place the exported ONNX into a Triton model repository (example in `deploy/services/triton/models/unet_model/`). Ensure the `config.pbtxt` matches input/output names and shapes.
+
+3) Start Triton with monitoring:
+
+```bash
+docker compose -f deploy/services/triton/docker-compose.triton.yml up -d
+
+# Triton HTTP:  http://localhost:8000
+# Triton GRPC:  localhost:8001
+# Triton METRICS: http://localhost:8002/metrics
+# Prometheus: http://localhost:9090
+# Grafana:   http://localhost:3000
+```
+
+4) Run Triton client for batch inference:
+
+```bash
+python scripts/predict_triton.py --config configs/config.yaml \
+  triton.server_url=localhost:8000 \
+  triton.model_name=unet_model \
+  triton.image_path=./data/test
+```
+
+Notes:
+- `configs/triton.yaml` defines inputs/outputs, model name, and server URL.
+- Ensure the ONNX I/O names match those in `config.pbtxt` (`input`/`output`).
+
+### Monitoring
+- FastAPI compose scrapes the app at `/metrics` (`monitoring/prometheus.yml`).
+- Triton compose scrapes Triton at `/metrics` (`monitoring/prometheus.triton.yml`).
+- Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`grafana_latency.png`).
+
+### Pitfalls
+- Keep patient/series-level splits to avoid data leakage.
+- Ensure `run_id` resolves to a run with a saved checkpoint.
+- Adjust batch sizes/workers for your device to avoid OOM.
+- If ports are taken, override compose or CLI ports.
