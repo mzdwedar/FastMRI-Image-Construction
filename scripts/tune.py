@@ -8,12 +8,14 @@ from optuna.integration import PyTorchLightningPruningCallback
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import MLFlowLogger
+import pytorch_lightning as pl
 from mlflow.exceptions import MlflowException
 from fastmri.data.subsample import RandomMaskFunc
-from src.model import UnetModel
-from src.data import FastMRIDataModule
+
 import optuna
 from optuna.samplers import TPESampler
+from src.model import UnetModel
+from src.data import FastMRIDataModule
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,10 +54,9 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
     optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "AdamW"])
     num_chans = trial.suggest_categorical("num_chans", [16, 32, 64])
     num_pools = trial.suggest_categorical("num_pools", [3, 4, 5])
-    dropout = trial.suggest_float("dropout", 0.0, 0.3, 0.5)
     batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])
 
-    model = UnetModel(lr=lr, weight_decay=weight_decay, optimizer_name=optimizer_name, num_chans=num_chans, num_pools=num_pools, dropout=dropout)
+    model = UnetModel(lr=lr, weight_decay=weight_decay, optimizer_name=optimizer_name, num_chans=num_chans, num_pools=num_pools, scheduler_config=cfg.trainer.train.scheduler)
     mask_func = RandomMaskFunc(center_fractions=[0.08], accelerations=[4])
 
     datamodule = FastMRIDataModule(
@@ -92,11 +93,11 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
         pass
     return float(best_score.detach().cpu().item()) if hasattr(best_score, "detach") else float(best_score)
 
-
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def tune_models(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
 
+    pl.seed_everything(cfg.trainer.seed)
     direction = "minimize" if cfg.trainer.checkpoint.mode == "min" else "maximize"
     study = optuna.create_study(direction=direction, sampler=TPESampler())
     n_trials = cfg.trainer.tune.n_trials

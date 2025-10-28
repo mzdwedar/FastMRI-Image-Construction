@@ -6,15 +6,16 @@ import logging
 import mlflow
 from typing import Dict, Optional
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Callback
+from pytorch_lightning.callbacks import ModelCheckpoint, Callback, LearningRateMonitor
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import MLFlowLogger
+import pytorch_lightning as pl
 from mlflow.exceptions import MlflowException
 from fastmri.data.subsample import RandomMaskFunc
 
 from src.model import UnetModel
 from src.data import FastMRIDataModule
-import src.utils as utils
+from scripts import utils
 
 class StopOnFirstImprovement(Callback):
     """Stop training immediately after the first improvement in the monitored metric."""
@@ -53,9 +54,9 @@ class StopOnFirstImprovement(Callback):
             if (self.mode == "min" and current_val < self.best_value) or (self.mode == "max" and current_val > self.best_value):
                 self.best_value = current_val
 
-
 def train_fn(cfg: DictConfig) -> Dict:
     """Function to train the model"""
+    pl.seed_everything(cfg.trainer.seeds)
     checkpoint_config = ModelCheckpoint(monitor=cfg.trainer.checkpoint.monitor,
                                         mode=cfg.trainer.checkpoint.mode,
                                         save_top_k=cfg.trainer.checkpoint.top_k,
@@ -64,8 +65,10 @@ def train_fn(cfg: DictConfig) -> Dict:
                                         filename=cfg.trainer.checkpoint.filename,
                                         auto_insert_metric_name=False
                                         )
+    
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
-    callbacks = [checkpoint_config]
+    callbacks = [checkpoint_config, lr_monitor]
     if getattr(cfg.trainer.stop_on_first_improvement, "enabled", False):
         callbacks.append(
             StopOnFirstImprovement(
@@ -104,9 +107,10 @@ def train_fn(cfg: DictConfig) -> Dict:
         cfg.datamodule.num_workers
     )
 
-    model = UnetModel(cfg.trainer.train.lr, cfg.trainer.train.weight_decay,
-                    cfg.trainer.train.optimizer_name, cfg.model.num_chans,
-                    cfg.model.num_pools, cfg.model.dropout)
+    model = UnetModel(cfg.trainer.train.optimizer.lr, cfg.trainer.train.optimizer.weight_decay,
+                      cfg.trainer.train.optimizer.name, cfg.model.num_chans,
+                      cfg.model.num_pools, cfg.trainer.train.scheduler
+                      )
     
     trainer = Trainer(accelerator=cfg.trainer.accelerator, devices=cfg.trainer.gpus,
                       max_epochs=cfg.trainer.train.max_epochs, logger=mlflow_logger,
@@ -115,9 +119,9 @@ def train_fn(cfg: DictConfig) -> Dict:
     
     trainer.fit(model, data_module)
 
-    hparams = {"lr": cfg.trainer.train.lr, 
-               "weight_decay": cfg.trainer.train.weight_decay,
-               "optimizer_name": cfg.trainer.train.optimizer_name,
+    hparams = {"lr": cfg.trainer.train.optimizer.lr,
+               "weight_decay": cfg.trainer.train.optimizer.weight_decay,
+               "optimizer_name": cfg.trainer.train.optimizer.name,
                "num_chans": cfg.model.num_chans,
                "num_pools": cfg.model.num_pools, 
                "dropout": cfg.model.dropout,
@@ -168,3 +172,4 @@ def main(cfg: DictConfig):
     return results['metrics']
 if __name__ == "__main__":
     main() # pylint: disable=no-value-for-parameter
+    
