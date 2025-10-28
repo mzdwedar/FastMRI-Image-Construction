@@ -22,7 +22,8 @@ dependencies = [
     "fastmri>=0.3.0",
     "onnx>=1.19.0",
     "onnxruntime==1.17.3",
-    "onnxscript>=0.5.3"
+    "onnxscript>=0.5.3",
+    
 ]
 
 [project.optional-dependencies]
@@ -38,8 +39,8 @@ dev = [
 ]
 
 cpu = [
-    "torch==2.3.1",
-    "onnxruntime==1.17.3"
+    "torch",
+    "onnxruntime==1.17.3",
 ]
 
 
