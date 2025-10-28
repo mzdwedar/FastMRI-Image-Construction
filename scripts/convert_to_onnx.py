@@ -26,7 +26,11 @@ def convert_to_onnx(ckpoint_path:str):
         output_names=["output"],
         opset_version=18,
         do_constant_folding=True,
-        verbose=True
+        verbose=True,
+        dynamic_axes={
+            "input": {0: "batch_size"},
+            "output": {0: "batch_size"}
+            },
     )
 
     print(f"ONNX model exported successfully to {onnx_path}")
