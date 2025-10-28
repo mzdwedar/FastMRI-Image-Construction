@@ -4,8 +4,9 @@ import pytorch_lightning as pl
 from torchmetrics.image import PeakSignalNoiseRatio
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 import segmentation_models_pytorch as smp
+from omegaconf import DictConfig, OmegaConf
 
-from .utils import nmse
+from .metrics import nmse
 
 class UnetModel(pl.LightningModule):
     """
@@ -15,12 +16,12 @@ class UnetModel(pl.LightningModule):
     supports training, validation, and testing with metrics including NMSE, PSNR, and SSIM.
     """
     
-    def __init__(self, lr, weight_decay, optimizer_name, num_chans, num_pools, dropout):
+    def __init__(self, lr, weight_decay, optimizer_name, num_chans, num_pools, scheduler_config=None):
         """
         Initializes the UnetModel model with UnetModel, loss functions, and image quality metrics.
         """
         super().__init__()
-
+        
         self.save_hyperparameters(
             {
                 "lr": lr,
@@ -28,7 +29,7 @@ class UnetModel(pl.LightningModule):
                 "optimizer_name": optimizer_name,
                 "num_chans": num_chans,
                 "num_pools": num_pools,
-                "dropout": dropout,
+                "scheduler": scheduler_config,
             }
         )
 
@@ -37,7 +38,6 @@ class UnetModel(pl.LightningModule):
                 encoder_weights=None,
                 in_channels=1,
                 classes=1,
-                decoder_dropout=dropout,
         )
         
         # Metrics for validation
@@ -104,7 +104,7 @@ class UnetModel(pl.LightningModule):
         self.log("psnr", self.psnr.compute(), prog_bar=True, on_epoch=True)
         self.log("ssim", self.ssim.compute(), prog_bar=True, on_epoch=True)
         self.psnr.reset()
-        self.ssim.reset()    
+        self.ssim.reset()
     
     def test_step(self, batch, batch_idx):
         """
@@ -157,15 +157,29 @@ class UnetModel(pl.LightningModule):
         """
         if self.hparams.optimizer_name == "AdamW":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
-        else:
+        elif self.hparams.optimizer_name == "Adam":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+        else:
+            raise ValueError(f"Unsupported optimizer: {self.hparams.optimizer_name}")
+        
+        scheduler_cfg = getattr(self.hparams, "scheduler", None)
+        if not scheduler_cfg:
+            return optimizer
+        
+        scheduler_cls = getattr(torch.optim.lr_scheduler, scheduler_cfg.name, None)
+        if scheduler_cls is None:
+            raise ValueError(f"Unsupported scheduler: {scheduler_cfg.name}")
+        
+        scheduler_params = OmegaConf.to_container(scheduler_cfg.params, resolve=True) or {}
+        scheduler = scheduler_cls(optimizer, **scheduler_params)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+        lr_scheduler_config = {
+            "scheduler": scheduler,
+            "interval": scheduler_cfg.interval,
+            "frequency": scheduler_cfg.frequency,
+        }
 
-        return {"optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "monitor": "val_loss",
-                    "interval": "epoch",
-                    "frequency": 1
-                }}
+        if scheduler_cfg.name == "ReduceLROnPlateau":
+            lr_scheduler_config["monitor"] = "val_loss"
+
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}

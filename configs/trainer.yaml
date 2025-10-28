@@ -1,7 +1,8 @@
 trainer:
   gpus: 1
-  log_every_n_steps: 10
-  accelerator: cpu
+  seeds: 42
+  log_every_n_steps: 1
+  accelerator: gpu
   MLFLOW_TRACKING_URI: 'file:/Users/mohamedzeyad/Desktop/fastmri_knee/mlruns'
   TRAIN_RESULTS_FILE: ${oc.env:TRAIN_RESULTS_FILE, ""}
   EVAL_RESULTS_FILE: ${oc.env:EVAL_RESULTS_FILE, ""}
@@ -10,14 +11,27 @@ trainer:
 
   train:
     experiment_name: ${oc.env:experiment_name, fastmri}
-    max_epochs: ${oc.decode:${oc.env:max_epochs, 10}}
+    max_epochs: ${oc.decode:${oc.env:max_epochs, 1}}
     strategy: auto
     results_fp: ""
     metric: psnr
-    lr: 1e-3
-    weight_decay: 1e-6
     batch_size: ${oc.decode:${oc.env:batch_size, 16}}
-    optimizer_name: Adam
+
+    optimizer:
+      lr: 1e-3
+      weight_decay: 1e-6
+      name: Adam
+
+    scheduler:
+      name: "ReduceLROnPlateau"
+      params:
+        mode: "min"
+        factor: 0.1
+        patience: 5
+      monitor: "val_loss"
+      interval: "epoch"
+      frequency: 1
+      
 
   eval:
     data_path: ${oc.env:eval_data_path, ./data/val}
