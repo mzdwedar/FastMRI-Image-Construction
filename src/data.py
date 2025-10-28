@@ -11,12 +11,23 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from collections import defaultdict
 from pathlib import Path
-
-from .utils import list_files
-
+from tqdm import tqdm
 
 data_url = os.getenv('url')
 tar_path = "knee_singlecoil_val.tar.xz"
+
+def move_data(files, src_dir, dest_dir):
+    
+    for filename in tqdm(files, desc=f"Moving files from {src_dir} to {dest_dir}"):
+        source = os.path.join(src_dir, filename)
+        dest = os.path.join(dest_dir, filename)
+        shutil.move(source, dest)
+
+def list_files(directory, extension=".h5", limit=None):
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(extension)]
+    if limit:
+        files = files[:limit]
+    return files
 
 class InferenceCustomDataset(Dataset):
 
@@ -99,7 +110,7 @@ class FastMRICustomDataset(Dataset):
         
         self.examples = []
         for fname in self.files:
-            with h5py.File(fname, "r") as hf:
+            with h5py.File(fname, "r", libver='latest', swmr=True) as hf:
                 num_slices = hf["kspace"].shape[0]
                 self.examples += [(fname, slice_num) for slice_num in range(num_slices)]
         
@@ -314,8 +325,11 @@ class FastMRIDataModule(pl.LightningDataModule):
             os.makedirs(extract_path, exist_ok=True)
 
             # Extract the .tar.xz file
-            with tarfile.open(tar_path, "r:xz") as tar:
-                tar.extractall(path=extract_path)
+            # Extract and flatten (remove top-level folder)
+            subprocess.run(
+                ["tar", "--strip-components=1", "-xJf", tar_path, "-C", extract_path],
+                check=True
+            )
 
             print(f"Extracted {tar_path} to {extract_path}")
 
@@ -358,7 +372,8 @@ class FastMRIDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
-            persistent_workers=True
+            persistent_workers=True,
+            pin_memory=True
         )
 
     def val_dataloader(self):
@@ -367,7 +382,8 @@ class FastMRIDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
-            persistent_workers=True
+            persistent_workers=True,
+            pin_memory=True
         )
 
     def test_dataloader(self):
@@ -376,5 +392,6 @@ class FastMRIDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
-            persistent_workers=True
+            persistent_workers=True,
+            pin_memory=True
         )
