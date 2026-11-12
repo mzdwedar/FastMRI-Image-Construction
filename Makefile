@@ -91,6 +91,9 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
 		-c 'for u in "" https://hooks.invalid/T/B/x; do SLACK_WEBHOOK_URL=$$u sh /cfg/render.sh --check /tmp/am.yml && amtool check-config /tmp/am.yml || exit 1; done'
 
+dashboards: ## Regenerate the Grafana dashboard JSON (CI fails if the committed files differ)
+	uv run python monitoring/grafana/build_dashboards.py
+
 down: ## Stop the Compose stack
 	docker compose down
 
@@ -104,4 +107,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs dashboards down data train clean
