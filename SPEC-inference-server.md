@@ -11,8 +11,8 @@ GPU is a drop-in profile.
 ## Current state (baseline)
 
 Triton `24.08-py3` in Compose, `--model-repository=/models` (default `none` control mode, all models loaded at
-start), `unet_model` with dynamic batching (preferred 4/8/16, 2 ms queue delay, max batch 16), `unet_model_nobatch`
-baseline, ORT intra-op threads 4, ports 8100/8101/8102 published, healthcheck on `/v2/health/ready`.
+start), `unet_model` with dynamic batching for its queue policy only (no delay, no preferred sizes, max batch 16),
+`unet_model_nobatch` baseline, ORT intra-op threads 4, ports 8100/8101/8102 published, healthcheck on `/v2/health/ready`.
 
 ## Requirements
 
@@ -30,8 +30,8 @@ baseline, ORT intra-op threads 4, ports 8100/8101/8102 published, healthcheck on
    policy `unless-stopped`.
 4. **Model config** (rendered by packaging; values here are the contract):
    - `max_batch_size: 16`; input `input` FP32 `[1,320,320]`, output `output` FP32 `[1,320,320]`;
-   - dynamic batching `preferred_batch_size [4, 8, 16]`, `max_queue_delay_microseconds` from template var
-     (default 2000), `default_queue_policy { timeout_action: REJECT, default_timeout_microseconds: 5000000 }` and
+   - dynamic batching with `max_queue_delay_microseconds` from a template var (CPU default 0, GPU 2000; T4 found waiting
+     to fill a batch buys nothing on 4 CPUs), no `preferred_batch_size` on CPU, `default_queue_policy { timeout_action: REJECT, default_timeout_microseconds: 5000000 }` and
      `max_queue_size: 256` so overload is rejected fast instead of queueing unbounded;
    - `model_warmup` with one batch of 1 and 16 zero inputs, so the first real request doesn't pay ORT init;
    - `instance_group` count template var (default 1 on CPU).
@@ -42,9 +42,14 @@ baseline, ORT intra-op threads 4, ports 8100/8101/8102 published, healthcheck on
    proposal is to move to a 2026 release during this module, revalidating ORT parity.
 7. **Performance budgets** (CPU profile, 4 vCPU, random-init weights, single-slice requests via
    `benchmarks/load_test.py`, recorded in `benchmarks/baselines/cpu.json`):
-   - establish baseline first (Task 1), then budgets are: throughput at concurrency 16 ≥ 0.9× baseline;
-     p99 latency at concurrency 1 ≤ 1.15× baseline; error rate 0;
-   - dynamic batching must beat `nobatch` throughput at concurrency 16 by ≥ 1.5× (validates the batching config);
+   - baseline (T4, median of 3 runs, `benchmarks/baselines/cpu.json`): 13.5 req/s at c=1 (p99 85 ms), 15.6 req/s at c=16
+     (p99 1.77 s), 15.5 req/s at c=32; throughput is capped near 15.5 req/s by the 4 CPUs and the model.
+     Budgets: throughput at c=16 ≥ 0.9× baseline; p99 at c=1 ≤ 2× baseline (1.15× flaked: single-client p99 swung
+     90-190 ms between identical runs); no request errors;
+   - **T4 finding (2026-11-12): batching does not help on CPU.** Medians at c=16: nobatch 15.1 req/s (p99 1.24 s), batching
+     with 2 ms delay 15.2 (1.82 s), 2 instances × 2 threads 16.6 (1.56 s, but 8.1 req/s at c=1 vs 13.3). The earlier
+     "batching ≥ 1.5× nobatch" budget was dropped. The default is dynamic batching with zero delay, which keeps the queue
+     policy (load shedding, integration-tested) and is at least as fast as the other 1×4 variants at every concurrency;
    - overload (concurrency 512) returns gRPC `UNAVAILABLE`/HTTP 503 within the queue timeout; no OOM, no crash.
 
 ## Commands
@@ -78,10 +83,10 @@ make bench-compare                       # diff latest results vs benchmarks/bas
 - [ ] Fresh `make up` with an empty registry: Triton healthy, gateway `/readyz` 503 with reason `model_not_ready`;
       after `make model-random promote VERSION=1`: ready.
 - [ ] Integration tests pass.
-- [ ] Baseline recorded; batching ≥ 1.5× nobatch at concurrency 16; overload test shows fast rejection, no crash.
+- [x] Baseline recorded; overload test shows fast rejection, no crash (the 1.5× batching criterion was dropped, see T4 finding).
 - [ ] `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` validates; GPU manual check documented.
 
 ## Open questions
 
-1. Instance count vs threads on CPU: 1 instance × 4 threads (current) vs 2 × 2. Proposal: benchmark both in Task 1,
-   keep the winner as the default.
+1. ~~Instance count vs threads on CPU~~ Decided (T4): 1 × 4 stays. 2 × 2 is about 8% faster at c=16 but 40% slower for a
+   single client, and interactive use matters more.

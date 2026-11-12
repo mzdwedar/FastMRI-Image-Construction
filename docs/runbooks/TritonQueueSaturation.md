@@ -14,7 +14,6 @@ Severity: ticket. Average time a request waits in Triton's queue is more than ha
 ## Likely causes
 
 - More concurrent requests than model instances can compute (CPU-only Triton with 4 CPUs).
-- Batch delay settings holding requests back to form larger batches.
 - Heavy `/v1/reconstructions` volumes crowding out interactive calls.
 
 ## Remediation
@@ -25,4 +24,4 @@ docker stats --no-stream triton
 ```
 - Raise `TRITON_CPUS` or raise the instance count (`instances`) in the Triton config template under `deploy/triton/templates/`, then `make sync` and restart Triton.
 - Lower `GATEWAY_MAX_INFLIGHT` so the gateway sheds load (503 with `Retry-After`) instead of queueing it behind Triton.
-- Check `queue_delay_us` (rendered as `max_queue_delay_microseconds`) in the model config if the queue time is close to it.
+- On the CPU profile the queue delay is 0, so queue time is pure waiting for an instance; on GPU check `queue_delay_us` (rendered as `max_queue_delay_microseconds`).

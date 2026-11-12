@@ -58,3 +58,10 @@ def test_batched_profiles_have_queue_policy_and_warmup(profile):
 def test_nobatch_baseline_is_left_unhardened():
     text = render("nobatch", version=1)
     assert "default_queue_policy" not in text and "model_warmup" not in text
+
+
+def test_cpu_never_waits_to_fill_a_batch_but_keeps_load_shedding():
+    cpu = render("cpu", version=1)
+    assert "max_queue_delay_microseconds: 0" in cpu and "preferred_batch_size" not in cpu
+    assert "max_queue_size: 256" in cpu and "timeout_action: REJECT" in cpu
+    assert "max_queue_delay_microseconds: 2000" in render("gpu", version=1)  # GPU keeps its delay (not measured)

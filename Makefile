@@ -117,6 +117,14 @@ ci-e2e: ## What e2e.yml runs: build, up (whole stack), model-random, promote, te
 	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
 	$(MAKE) test-e2e
 
+NAME ?= cpu
+MODEL ?= unet_model
+bench: ## Load-test Triton directly (needs `make up-dev` + `make sync`): make bench NAME=cpu MODEL=unet_model [ARGS="--duration 10"]
+	uv run python -m benchmarks.load_test --model $(MODEL) --out benchmarks/results/$(NAME).json $(ARGS)
+
+bench-compare: ## Check benchmarks/results/cpu.json against benchmarks/baselines/cpu.json
+	uv run python -m benchmarks.compare $(ARGS)
+
 down: ## Stop the Compose stack
 	docker compose down
 
@@ -130,4 +138,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
+.PHONY: bench bench-compare help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
