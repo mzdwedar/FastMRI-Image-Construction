@@ -12,6 +12,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from fastmri_knee.preprocess import kspace_to_image, preprocess_target
+
 data_url = os.getenv('url')
 tar_path = "knee_singlecoil_val.tar.xz"
 
@@ -227,35 +229,19 @@ class FastMRITransform:
                 fname (str): Source filename.
                 slice_num (int): Slice index.
         """
-        # Ensure (1, H, W) for singlecoil
-        if kspace.ndim == 2:
-            kspace = kspace[None, ...]
-
+        mask = None
         if self.mask_func is not None:
+            if kspace.ndim == 2:
+                kspace = kspace[None, ...]
             mask, _ = self.mask_func(kspace.shape, seed=None)
-            kspace = kspace * mask
+            mask = mask.numpy()
 
-        image = ifft2c(kspace)
-        image = torch.abs(image)
-
-        image = normalize(image)
+        # Shared numpy implementation, identical to what the serving gateway runs
+        image = torch.from_numpy(kspace_to_image(kspace.numpy(), mask=mask, crop_size=self.crop_size))
         if target is not None:
-            target = normalize(target)
-
-        # Add channel dimension
-        if image.ndim == 2:
-            image = image.unsqueeze(0)
-        if target is not None and target.ndim == 2:
-            target = target.unsqueeze(0)
-        
-        image = complex_center_crop(image, self.crop_size)
-        if target is not None:
-            target = complex_center_crop(target, self.crop_size)
-
-        if target is not None:
+            target = torch.from_numpy(preprocess_target(target.numpy(), crop_size=self.crop_size))
             return image, target, fname, slice_num
-        else:
-            return image, fname, slice_num
+        return image, fname, slice_num
 
 class FastMRIDataModule(pl.LightningDataModule):
     """

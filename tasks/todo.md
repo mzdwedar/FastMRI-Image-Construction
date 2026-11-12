@@ -55,7 +55,7 @@ task that needs them is reached.
   - Verify: `make setup lint test` on a clean checkout (macOS) and in `python:3.12` Docker (Linux).
   - Deps: F1, F4, Q2, Q4 · Files: `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `.env.example`
 
-- [ ] **F7: numpy preprocessing, shared by training** — M
+- [x] **F7: numpy preprocessing, shared by training** — M
   - Do: `fastmri_knee/preprocess.py` (`PREPROCESS_VERSION="1"`, exact current semantics incl. normalize-then-crop,
     optional mask); `FastMRITransform` calls it; tests for parity and no-torch import.
   - Acceptance: parity with the old torch transform `atol=1e-6`; imports with torch blocked; float32, `(1,320,320)`, range [0,1], no NaN on zero k-space.
