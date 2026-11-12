@@ -12,7 +12,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from fastmri_knee.gateway.errors import install_handlers, problem_response
 from fastmri_knee.gateway.logging import configure_logging
-from fastmri_knee.gateway.routes import router
+from fastmri_knee.gateway.readiness import ReadinessMonitor
+from fastmri_knee.gateway.routes import probes, router
 from fastmri_knee.gateway.settings import Settings
 from fastmri_knee.gateway.triton_client import GrpcTritonClient, TritonClient
 
@@ -42,7 +43,11 @@ class RequestIdMiddleware:
             nonlocal started
             if message["type"] == "http.response.start":
                 started = True
-                MutableHeaders(scope=message)["X-Request-ID"] = rid
+                headers = MutableHeaders(scope=message)
+                headers["X-Request-ID"] = rid
+                monitor = getattr(scope["app"].state, "readiness", None) if "app" in scope else None
+                if monitor and (version := monitor.model_version):
+                    headers["X-Model-Version"] = version
             await send(message)
 
         try:
@@ -63,10 +68,13 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # One gRPC channel per worker. Creating it makes no network call, so the gateway starts without Triton.
         app.state.triton = triton or GrpcTritonClient(settings.triton_url, settings.triton_model_name)
+        app.state.readiness = ReadinessMonitor(app.state.triton, settings.readiness_interval_s)
+        await app.state.readiness.start()
         log.info("gateway_started", env=settings.env)
         try:
             yield
         finally:
+            await app.state.readiness.stop()
             await app.state.triton.close()
             log.info("gateway_stopped")
 
@@ -75,6 +83,7 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
     app.include_router(router)
+    app.include_router(probes)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:

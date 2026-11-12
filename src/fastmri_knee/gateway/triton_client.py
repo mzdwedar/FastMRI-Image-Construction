@@ -7,7 +7,8 @@ tests use a fake. Retry/chunk/validate logic lives in `infer_volume` so it is ex
 import asyncio
 import random
 import time
-from typing import Protocol, cast
+from dataclasses import dataclass, field
+from typing import Any, Protocol, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -39,7 +40,23 @@ class InvalidOutputError(Exception):
     """Triton returned a wrongly shaped or non-finite output. Never returned to clients (-> 500)."""
 
 
+@dataclass(frozen=True)
+class ModelState:
+    """A ready model as reported by Triton."""
+
+    version: str
+    platform: str = ""
+    max_batch_size: int = 0
+    inputs: list[dict[str, Any]] = field(default_factory=list)
+    outputs: list[dict[str, Any]] = field(default_factory=list)
+
+
 class TritonClient(Protocol):
+    async def model_state(self, timeout_s: float) -> ModelState:
+        """The served, ready model. Raises `TritonError`: UNAVAILABLE/DEADLINE_EXCEEDED when Triton cannot be
+        reached, any other code (e.g. NOT_FOUND) when the model is not loaded or not ready."""
+        ...
+
     async def get_max_batch_size(self) -> int:
         """Max slices per Triton request (>= 1). Raises `TritonError` if Triton cannot be reached."""
         ...
@@ -142,6 +159,28 @@ class GrpcTritonClient:
         if out is None:
             raise InvalidOutputError("response has no output tensor")
         return cast(F32, out)
+
+    async def model_state(self, timeout_s: float) -> ModelState:
+        try:
+            meta = await self._client.get_model_metadata(self._model, as_json=True, client_timeout=timeout_s)
+            versions = sorted(meta.get("versions", []), key=int)
+            if not versions:
+                raise TritonError("NOT_FOUND", "no versions listed")
+            version = versions[-1]
+            if not await self._client.is_model_ready(self._model, version, client_timeout=timeout_s):
+                raise TritonError("NOT_FOUND", "model not ready")
+            cfg = await self._client.get_model_config(self._model, version, as_json=True, client_timeout=timeout_s)
+        except TritonError:
+            raise
+        except Exception as e:
+            raise TritonError(self._code(e), "model state unavailable") from e
+        return ModelState(
+            version=version,
+            platform=meta.get("platform", ""),
+            max_batch_size=int(cfg.get("config", {}).get("max_batch_size", 0)),
+            inputs=meta.get("inputs", []),
+            outputs=meta.get("outputs", []),
+        )
 
     async def close(self) -> None:
         await self._client.close()

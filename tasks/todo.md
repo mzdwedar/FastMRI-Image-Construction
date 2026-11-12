@@ -272,7 +272,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_infer.py`; manual curl against `make up` Triton.
   - Deps: G1, P6 · Files: `src/fastmri_knee/gateway/{triton_client,routes}.py`, `tests/unit/gateway/{fakes,test_infer}.py`
 
-- [ ] **G3: Readiness loop, `/readyz`, `/v1/model`** — S
+- [x] **G3: Readiness loop, `/readyz`, `/v1/model`** — S
   - Do: background task polls model readiness + version every 2 s; `/readyz` reads cache with `{reason}`;
     `/v1/model` returns version + card (from registry tag or Triton metadata); `X-Model-Version` header.
   - Acceptance: not-ready reasons `triton_unreachable` / `model_not_ready`; flips within 10 s.

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     triton_model_name: str = "unet_model"
     triton_timeout_s: float = Field(default=10.0, gt=0)
 
+    readiness_interval_s: float = Field(default=2.0, gt=0)
+
     max_upload_mb: int = Field(default=256, ge=1)
     max_slices: int = Field(default=64, ge=1)
     max_inflight: int = Field(default=32, ge=1)

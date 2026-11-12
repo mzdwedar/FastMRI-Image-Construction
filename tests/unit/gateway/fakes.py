@@ -1,6 +1,6 @@
 import numpy as np
 
-from fastmri_knee.gateway.triton_client import TritonError
+from fastmri_knee.gateway.triton_client import ModelState, TritonError
 
 
 class FakeTritonClient:
@@ -13,6 +13,13 @@ class FakeTritonClient:
         self.delay_s = delay_s
         self.calls: list[int] = []  # batch size of every infer call, including retries
         self.closed = False
+        # What `model_state` does: a ModelState is returned, an Exception is raised. Mutate it mid-test to flip it.
+        self.state: ModelState | Exception = ModelState("1", "onnxruntime_onnx", max_batch_size)
+
+    async def model_state(self, timeout_s: float) -> ModelState:
+        if isinstance(self.state, Exception):
+            raise self.state
+        return self.state
 
     async def get_max_batch_size(self) -> int:
         return self.max_batch_size
