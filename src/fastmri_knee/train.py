@@ -115,6 +115,7 @@ def train_fn(cfg: DictConfig) -> dict:
         mask_func,
         cfg.datamodule.batch_size,
         cfg.datamodule.num_workers,
+        cfg.datamodule.num_samples,
     )
 
     model = UnetModel(

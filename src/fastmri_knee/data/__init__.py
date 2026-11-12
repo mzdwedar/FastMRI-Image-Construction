@@ -5,7 +5,7 @@ from pathlib import Path
 import h5py
 import pytorch_lightning as pl
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 
 from fastmri_knee.preprocess import kspace_to_image, preprocess_target
 
@@ -229,6 +229,7 @@ class FastMRIDataModule(pl.LightningDataModule):
         mask_func (callable, optional): Function to generate undersampling masks.
         batch_size (int): Batch size for all dataloaders.
         num_workers (int): Number of workers for dataloaders.
+        num_samples (int): If > 0, keep only the first `num_samples` slices of the train and val sets (smoke runs).
     """
 
     def __init__(
@@ -240,6 +241,7 @@ class FastMRIDataModule(pl.LightningDataModule):
         mask_func=None,
         batch_size: int = 4,
         num_workers: int = 4,
+        num_samples: int = -1,
     ):
         super().__init__()
         self.data_root = data_root
@@ -249,6 +251,7 @@ class FastMRIDataModule(pl.LightningDataModule):
         self.mask_func = mask_func
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.num_samples = num_samples
 
         # Placeholder for datasets
         self.train_dataset = None
@@ -271,6 +274,9 @@ class FastMRIDataModule(pl.LightningDataModule):
                 root=self.val_root,
                 transform=FastMRITransform(mask_func=None),  # No mask for validation
             )
+            if self.num_samples > 0:
+                self.train_dataset = Subset(self.train_dataset, range(min(self.num_samples, len(self.train_dataset))))
+                self.val_dataset = Subset(self.val_dataset, range(min(self.num_samples, len(self.val_dataset))))
 
         if stage == "test" or stage is None:
             self.test_dataset = FastMRICustomDataset(

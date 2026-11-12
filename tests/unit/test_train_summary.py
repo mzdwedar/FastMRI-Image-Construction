@@ -24,13 +24,14 @@ def workspace(tmp_path):
     return tmp_path
 
 
-def run(workspace: Path, *, max_steps: int, max_epochs: int) -> dict:
+def run(workspace: Path, *, max_steps: int, max_epochs: int, num_samples: int = -1) -> dict:
     overrides = [
         f"datamodule.data_root={workspace}",
         f"datamodule.train_root={workspace / 'train'}",
         f"datamodule.val_root={workspace / 'val'}",
         "datamodule.batch_size=1",
         "datamodule.num_workers=0",
+        f"datamodule.num_samples={num_samples}",
         f"trainer.checkpoint.path={workspace / 'ckpt'}",
         f"trainer.MLFLOW_TRACKING_URI=file:{workspace / 'mlruns'}",
         "trainer.accelerator=cpu",
@@ -69,3 +70,10 @@ def test_summary_written_then_rerun_resumes(workspace):
     resumed = json.loads((ckpt_dir / "run_summary.json").read_text())
     assert resumed["resumed_from"] == str(ckpt_dir / "last.ckpt")
     assert resumed["global_step"] == 4  # continued from step 2, did not restart at 0
+
+
+def test_num_samples_limits_the_slices_used(workspace):
+    run(workspace, max_steps=-1, max_epochs=1, num_samples=1)  # 1 of 2 slices, batch 1 = 1 step
+
+    summary = json.loads((workspace / "ckpt" / "run_summary.json").read_text())
+    assert summary["global_step"] == 1

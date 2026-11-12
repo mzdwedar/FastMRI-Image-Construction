@@ -501,7 +501,8 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: `uv run pytest tests/unit/test_train_summary.py`.
   - Deps: F5, F7, Q2 · Files: `src/fastmri_knee/train.py`, `configs/trainer.yaml`, `configs/datamodule.yaml`, `tests/unit/test_train_summary.py`
 
-- [ ] **K2: Colab training notebook (run from VS Code)** — S
+- [~] **K2: Colab training notebook (run from VS Code)** — S
+  - Written 2026-11-12, awaiting your Colab run: `notebooks/train_colab.ipynb`, `docs/training-colab.md`, `num_samples` now wired. Training command dry-run locally with the notebook's env vars (CPU, synthetic). Drive mount under the VS Code kernel and the GPU smoke run are unverified. Assumed Q17=(a), Q18=first-N-files for now.
   - Context: you open the repo notebook in VS Code and connect it to a Colab GPU kernel with the Google Colab
     extension. The kernel is remote: it can't see local files or uncommitted changes, so it installs the package
     from a pushed commit, and outputs come back via Drive.

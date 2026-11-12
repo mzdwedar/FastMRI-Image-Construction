@@ -5,7 +5,7 @@ datamodule:
   test_root: ${oc.env:test_root, "data/test"}
   batch_size: ${oc.decode:${oc.env:batch_size, 16}}
   num_workers: ${oc.decode:${oc.env:num_workers, 4}}
-  num_samples: -1
+  num_samples: ${oc.decode:${oc.env:num_samples, -1}}  # >0 keeps the first N slices (smoke runs)
   mask:
     type: random
     acceleration: 4
