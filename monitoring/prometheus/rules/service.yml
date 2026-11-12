@@ -4,7 +4,7 @@ groups:
   - name: service
     rules:
       - alert: GatewayDown
-        expr: up{job="gateway"} == 0
+        expr: up{job="gateway"} ==
         for: 1m
         labels: {severity: page}
         annotations:
