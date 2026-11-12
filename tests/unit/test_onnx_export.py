@@ -28,4 +28,6 @@ def test_dashboards_use_rates_not_raw_counters():
             for target in panel["targets"]:
                 expr = target["expr"]
                 if "_duration_us" in expr or "_total" in expr or "_bucket" in expr:
-                    assert "rate(" in expr, f"{path.name} / {panel['title']}: counter plotted without rate()"
+                    assert "rate(" in expr or "increase(" in expr, (
+                        f"{path.name} / {panel['title']}: counter plotted without rate()/increase()"
+                    )
