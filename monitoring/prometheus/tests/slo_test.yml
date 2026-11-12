@@ -1,0 +1,134 @@
+# Burn-rate math on synthetic histograms (1 sample a minute). `good` is the le bucket (under the threshold), `count` all
+# requests, 100 a minute. Infer budget 1 %, so 15 % slow = burn 15; reconstructions budget 5 %, so 35 % slow = burn 7.
+rule_files:
+  - ../rules/slo.yml
+evaluation_interval: 30s
+
+tests:
+
+  - name: "infer 15% slow: SLI and burn rate are exact, fast burn pages"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/infer"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}'
+        values: '0+85x400'
+    promql_expr_test:
+      - expr: round(slo:latency_good_ratio:1h{route="/v1/infer"}, 0.001)
+        eval_time: 70m
+        exp_samples:
+          - {labels: '{route="/v1/infer"}', value: 0.85}
+      - expr: round(slo:latency_burn_rate:1h{route="/v1/infer"}, 0.001)
+        eval_time: 70m
+        exp_samples:
+          - {labels: '{route="/v1/infer"}', value: 15}
+      - expr: round(slo:latency_burn_rate:5m{route="/v1/infer"}, 0.001)
+        eval_time: 70m
+        exp_samples:
+          - {labels: '{route="/v1/infer"}', value: 15}
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: LatencySLOBurnFast
+        exp_alerts:
+          - exp_labels: {severity: page, route: "/v1/infer"}
+            exp_annotations:
+              summary: "/v1/infer is burning its latency error budget 14x too fast"
+              description: "Burn rate is 15.0x over 1h (and over 5m). At this rate the 30 d budget is gone in about two days."
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnFast.md
+      # 70 min of data at burn 15 also satisfies the slow rule: both fire, as they should for a severe burn
+      - eval_time: 70m
+        alertname: LatencySLOBurnSlow
+        exp_alerts:
+          - exp_labels: {severity: ticket, route: "/v1/infer"}
+            exp_annotations:
+              summary: "/v1/infer is steadily burning its latency error budget"
+              description: "Burn rate is 15.0x over 6h (and over 30m)."
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnSlow.md
+
+  - name: "infer 13% slow stays under the fast threshold"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/infer"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}'
+        values: '0+87x400'
+    alert_rule_test:
+      - {eval_time: 70m, alertname: LatencySLOBurnFast, exp_alerts: []}
+
+  - name: "infer 7% slow for 6h: ticket, no page"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/infer"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}'
+        values: '0+93x400'
+    promql_expr_test:
+      - expr: round(slo:latency_burn_rate:6h{route="/v1/infer"}, 0.001)
+        eval_time: 6h30m
+        exp_samples:
+          - {labels: '{route="/v1/infer"}', value: 7}
+      - expr: round(slo:latency_burn_rate:30m{route="/v1/infer"}, 0.001)
+        eval_time: 6h30m
+        exp_samples:
+          - {labels: '{route="/v1/infer"}', value: 7}
+    alert_rule_test:
+      - eval_time: 6h30m
+        alertname: LatencySLOBurnSlow
+        exp_alerts:
+          - exp_labels: {severity: ticket, route: "/v1/infer"}
+            exp_annotations:
+              summary: "/v1/infer is steadily burning its latency error budget"
+              description: "Burn rate is 7.0x over 6h (and over 30m)."
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnSlow.md
+      - {eval_time: 6h30m, alertname: LatencySLOBurnFast, exp_alerts: []}
+
+  - name: "infer 5% slow for 6h: under both thresholds"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/infer"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}'
+        values: '0+95x400'
+    alert_rule_test:
+      - {eval_time: 6h30m, alertname: LatencySLOBurnSlow, exp_alerts: []}
+      - {eval_time: 6h30m, alertname: LatencySLOBurnFast, exp_alerts: []}
+
+  - name: "reconstructions 35% slow for 6h: slow burn uses the 5% budget"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/reconstructions"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}'
+        values: '0+65x400'
+    promql_expr_test:
+      - expr: round(slo:latency_burn_rate:6h{route="/v1/reconstructions"}, 0.001)
+        eval_time: 6h30m
+        exp_samples:
+          - {labels: '{route="/v1/reconstructions"}', value: 7}
+    alert_rule_test:
+      - eval_time: 6h30m
+        alertname: LatencySLOBurnSlow
+        exp_alerts:
+          - exp_labels: {severity: ticket, route: "/v1/reconstructions"}
+            exp_annotations:
+              summary: "/v1/reconstructions is steadily burning its latency error budget"
+              description: "Burn rate is 7.0x over 6h (and over 30m)."
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnSlow.md
+      - {eval_time: 6h30m, alertname: LatencySLOBurnFast, exp_alerts: []}
+
+  - name: "reconstructions 80% slow: fast burn pages (burn 16)"
+    interval: 1m
+    input_series:
+      - series: 'gateway_request_duration_seconds_count{route="/v1/reconstructions"}'
+        values: '0+100x400'
+      - series: 'gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}'
+        values: '0+20x400'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: LatencySLOBurnFast
+        exp_alerts:
+          - exp_labels: {severity: page, route: "/v1/reconstructions"}
+            exp_annotations:
+              summary: "/v1/reconstructions is burning its latency error budget 14x too fast"
+              description: "Burn rate is 16.0x over 1h (and over 5m). At this rate the 30 d budget is gone in about two days."
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnFast.md
