@@ -39,13 +39,13 @@ jobs:
       - name: Compare and summarise
         run: |
           if [ -f benchmarks/baselines/ci.json ]; then
-            args="--baseline benchmarks/baselines/ci.json --max-regression 0.3"
+            args=(--baseline benchmarks/baselines/ci.json --max-regression 0.3)
           else
-            args="--report-only"
+            args=(--report-only)
             echo "::notice::no benchmarks/baselines/ci.json yet: report only. Commit this run's bench-result artifact as that file to enable the gate."
           fi
           rc=0
-          uv run python -m benchmarks.compare --result benchmarks/results/ci.json $args --markdown bench-summary.md || rc=$?
+          uv run python -m benchmarks.compare --result benchmarks/results/ci.json "${args[@]}" --markdown bench-summary.md || rc=$?
           cat bench-summary.md >> "$GITHUB_STEP_SUMMARY"
           exit $rc
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
