@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import pytest
@@ -6,8 +5,6 @@ import pytest
 from fastmri_knee.packaging.triton_repo import render
 
 GOLDEN = Path(__file__).parent / "golden"
-LEGACY = Path("deploy/services/triton/models")  # removed in T1, when Compose switches to the rendered repository
-POLICY = re.compile(r"version_policy \{ [^\n]*\}\n")
 
 CASES = {
     "cpu": {"profile": "cpu"},
@@ -20,17 +17,6 @@ CASES = {
 @pytest.mark.parametrize("name", CASES)
 def test_render_matches_golden_file(name):
     assert render(version=3, **CASES[name]) == (GOLDEN / f"{name}.pbtxt").read_text()
-
-
-@pytest.mark.skipif(not LEGACY.exists(), reason="legacy model repository already removed")
-@pytest.mark.parametrize(("profile", "legacy_dir"), [("cpu", "unet_model"), ("nobatch", "unet_model_nobatch")])
-def test_default_render_equals_todays_config_plus_specific_version_policy(profile, legacy_dir):
-    legacy = (LEGACY / legacy_dir / "config.pbtxt").read_text()
-    assert "version_policy { latest { num_versions: 1 } }\n" in legacy
-    expected = POLICY.sub("version_policy { specific { versions: [ 7 ] } }\n", legacy)
-    # the cpu template's comment on max_queue_delay is generic now that the delay is a variable
-    expected = expected.replace("# wait up to 2 ms to fill a batch", "# wait up to this long to fill a batch")
-    assert render(profile, version=7) == expected
 
 
 def test_version_threads_instances_and_queue_delay_are_substituted():

@@ -33,7 +33,12 @@ model-random: ## Register an untrained model (random_init=true) in MLflow; no da
 	uv run python -m fastmri_knee.packaging register --random-init --tracking-uri $(MLFLOW_TRACKING_URI)
 
 up: ## Start the Compose stack (MLflow :5001 plus serving)
+	mkdir -p deploy/model_repository
 	docker compose up -d
+
+up-dev: ## Same, and publish Triton HTTP :8100 / gRPC :8101 on the host
+	mkdir -p deploy/model_repository
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 down: ## Stop the Compose stack
 	docker compose down
@@ -48,4 +53,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random up down data train clean
+.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random up up-dev down data train clean

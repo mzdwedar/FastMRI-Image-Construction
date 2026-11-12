@@ -2,7 +2,7 @@
 
     uv run python -m fastmri_knee.packaging.export --checkpoint artifacts/model.ckpt
 
-Writes model.onnx into every Triton model directory listed in --model-dirs, then runs
+Writes <dir>/1/model.onnx for every directory in --model-dirs (default artifacts/onnx/unet_model), then runs
 the same random batch through PyTorch and ONNX Runtime and fails if outputs diverge.
 
 --random-init exports untrained weights and also writes a matching .ckpt. Serving
@@ -21,8 +21,7 @@ from pytorch_lightning import Trainer
 
 from fastmri_knee.model import UnetModel
 
-MODEL_REPO = Path("deploy/services/triton/models")
-DEFAULT_MODEL_DIRS = [MODEL_REPO / "unet_model", MODEL_REPO / "unet_model_nobatch"]
+DEFAULT_MODEL_DIRS = [Path("artifacts/onnx/unet_model")]  # the served repository is written only by `sync`
 INPUT_SHAPE = (1, 320, 320)
 
 

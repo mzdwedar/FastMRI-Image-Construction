@@ -159,7 +159,19 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_render.py`.
   - Deps: F5 · Files: `deploy/triton/templates/*.pbtxt`, `src/fastmri_knee/packaging/triton_repo.py`, `tests/unit/packaging/test_render.py`, `tests/unit/packaging/golden/*`
 
-- [ ] **T1: Triton explicit mode on an empty repo (+ arm64 spike)** — S
+- [x] **T1: Triton explicit mode on an empty repo (+ arm64 spike)** — S
+  - Done 2026-11-12. Compose `triton` runs explicit mode on `deploy/model_repository` (ro, gitignored, `make up` creates
+    it), `TRITON_IMAGE/CPUS/MEM` in `.env.example`, `restart: unless-stopped`, healthcheck on `/v2/health/live`, no host
+    ports; `make up-dev` + `docker-compose.dev.yml` publish 8100/8101 (an override file, not a `dev` profile: a profile
+    can't remove ports from the same service). Legacy `deploy/services/triton/models/` removed; `export.py` writes to
+    `artifacts/onnx/unet_model` by default. Tracing flags wait for the O-tasks.
+  - Verified natively on arm64 (24.08-py3 image is arm64, 7.4 GB): empty repo → server starts, live 200, container
+    healthy, limits 4 CPU / 4 GiB. **Finding: server `/v2/health/ready` is 200 on an empty repo** (strict-readiness only
+    fails for a registered-but-unready model), not the 503 this task assumed. The correct not-ready signal is
+    `/v2/models/unet_model/ready` (400 until loaded); the gateway and `sync` must use it. Also checked: a rendered cpu config
+    plus random-init ONNX loads via `POST /v2/repository/models/unet_model/load` → `versions/1/ready` 200.
+  - arm64 spike: tags 24.08, 25.06, 25.10, 26.01, 26.03, 26.05 py3 all list amd64 and arm64 manifests; no emulation fallback.
+    Pull needed `docker logout nvcr.io` (stale stored login gave 401).
   - Do: check native arm64 manifest for the pinned tag (record result); flags per SPEC-inference-server §1;
     mount `deploy/model_repository` read-only; `TRITON_IMAGE/CPUS/MEM` in `.env`; `dev` profile publishes 8100/8101;
     default profile publishes none.
@@ -552,12 +564,15 @@ so the decision isn't lost.
   - Recommendation: latest 2.x + SQLite + local volume; revisit if multi-user.
   - Trigger: P1 · Blocks: P1 · Spec: SPEC-model-packaging req 1
 
-- [ ] **Q7: Triton model control mode**
+- [x] **Q7: Triton model control mode**
+  - Decided 2026-11-12: `explicit` (recommendation).
   - Options: `explicit` (sync calls the load API; failures visible) · `poll` (Triton watches the repo).
   - Recommendation: `explicit`.
   - Trigger: T1 · Blocks: T1, P5 · Spec: SPEC-model-packaging OQ2
 
 - [ ] **Q8: Triton image version**
+  - 2026-11-12: T1 stays on 24.08-py3 (overridable via `TRITON_IMAGE`); all tags 24.08–26.05 have arm64. Moving to a
+    current release waits for T3 parity evidence, so this stays open.
   - Context: pinned to `24.08-py3`; also must confirm an arm64 build exists (T1 spike).
   - Options: stay on 24.08 · move to a current 2026 release (revalidate ORT parity).
   - Recommendation: current release if it has arm64 and passes T3; decide with T1 evidence.
