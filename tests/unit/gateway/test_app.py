@@ -9,7 +9,7 @@ from fastmri_knee.gateway.settings import Settings
 
 @pytest.fixture
 def app():
-    app = create_app(Settings(env="dev"))
+    app = create_app(Settings(env="dev", auth_disabled=True))
 
     @app.get("/boom")
     async def boom():

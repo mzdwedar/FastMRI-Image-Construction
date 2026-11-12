@@ -8,10 +8,12 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import structlog
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 
+from fastmri_knee.gateway.auth import require_api_key
 from fastmri_knee.gateway.errors import ProblemError
+from fastmri_knee.gateway.limits import limit_inflight
 from fastmri_knee.gateway.triton_client import (
     F32,
     InvalidOutputError,
@@ -25,7 +27,7 @@ from fastmri_knee.gateway.uploads import read_kspace, stream_file_part, temp_upl
 from fastmri_knee.preprocess import PREPROCESS_VERSION, kspace_to_image_scaled
 
 log = structlog.get_logger()
-router = APIRouter(prefix="/v1")
+router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)])
 probes = APIRouter()  # unversioned, unauthenticated
 
 SLICE_SHAPE = (1, 320, 320)
@@ -69,6 +71,7 @@ async def read_capped(request: Request, limit: int) -> bytes | None:
     summary="Low-level inference (benchmark path)",
     response_class=Response,
     responses={200: {"content": {OCTET_STREAM: {}}}},
+    dependencies=[Depends(limit_inflight)],
 )
 async def infer(request: Request) -> Response:
     """Body: float32 bytes, N×1×320×320 with 1 ≤ N ≤ MAX_SLICES. Returns the same shape."""
@@ -141,6 +144,7 @@ def encode_reconstruction(recon: F32, scale: F32, model_version: str, request_id
     summary="Reconstruct a k-space volume",
     response_class=Response,
     responses={200: {"content": {HDF5: {}}}},
+    dependencies=[Depends(limit_inflight)],
 )
 async def reconstructions(
     request: Request,

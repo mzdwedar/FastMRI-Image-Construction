@@ -10,7 +10,9 @@ from fastapi import FastAPI
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from fastmri_knee.gateway.auth import key_hashes_for
 from fastmri_knee.gateway.errors import install_handlers, problem_response
+from fastmri_knee.gateway.limits import InflightLimiter
 from fastmri_knee.gateway.logging import configure_logging
 from fastmri_knee.gateway.readiness import ReadinessMonitor
 from fastmri_knee.gateway.routes import probes, router
@@ -80,6 +82,8 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
 
     app = FastAPI(title="fastmri-knee gateway", version="1", lifespan=lifespan)
     app.state.settings = settings
+    app.state.key_hashes = key_hashes_for(settings)  # missing/empty keys file is a startup error
+    app.state.limiter = InflightLimiter(settings.max_inflight)
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
     app.include_router(router)

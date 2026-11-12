@@ -287,7 +287,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_reconstructions.py`.
   - Deps: G2, F7, Q5, Q10 · Files: `src/fastmri_knee/gateway/{uploads,routes,schemas}.py`, `tests/unit/gateway/test_reconstructions.py`, `tests/fixtures/` helper
 
-- [ ] **G5: API-key auth and backpressure** — S
+- [x] **G5: API-key auth and backpressure** — S
   - Do: hashed keys file, constant-time compare, dev-only bypass (startup error otherwise); global semaphore
     `MAX_INFLIGHT` → 503 + `Retry-After: 1`.
   - Acceptance: 401 cases; bypass outside dev fails startup; saturation returns 503 immediately.

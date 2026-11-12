@@ -36,7 +36,9 @@ def fake():
 
 
 def client_for(fake, tmp_dir, **settings):
-    app = create_app(Settings(env="dev", tmp_dir=str(tmp_dir), readiness_interval_s=30, **settings), triton=fake)
+    app = create_app(
+        Settings(env="dev", auth_disabled=True, tmp_dir=str(tmp_dir), readiness_interval_s=30, **settings), triton=fake
+    )
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -184,7 +186,10 @@ def test_declared_content_length_over_limit_rejected_without_reading(fake, tmp_d
 
 
 def test_300mb_stream_rejected_without_buffering(fake, tmp_dir):
-    app = create_app(Settings(env="dev", tmp_dir=str(tmp_dir), max_upload_mb=64, readiness_interval_s=30), triton=fake)
+    app = create_app(
+        Settings(env="dev", auth_disabled=True, tmp_dir=str(tmp_dir), max_upload_mb=64, readiness_interval_s=30),
+        triton=fake,
+    )
     chunk = b"\x00" * (1 << 20)
     boundary = "bnd"
     sent = 0
@@ -220,7 +225,9 @@ def test_300mb_stream_rejected_without_buffering(fake, tmp_dir):
 
 
 def test_temp_file_removed_on_client_disconnect(fake, tmp_dir):
-    app = create_app(Settings(env="dev", tmp_dir=str(tmp_dir), readiness_interval_s=30), triton=fake)
+    app = create_app(
+        Settings(env="dev", auth_disabled=True, tmp_dir=str(tmp_dir), readiness_interval_s=30), triton=fake
+    )
     head = b'--b\r\nContent-Disposition: form-data; name="file"; filename="x.h5"\r\n\r\n' + b"\x00" * 1000
     messages = iter(
         [
