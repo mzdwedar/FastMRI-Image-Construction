@@ -9,7 +9,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
-    directory: /deploy/services/fastapi
+    directory: /deploy/gateway
     schedule:
       interval: weekly
     groups:

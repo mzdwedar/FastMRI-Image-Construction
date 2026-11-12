@@ -54,10 +54,12 @@ api-key: ## Mint a gateway API key: prints it once, appends its hash to secrets/
 	@uv run python -m fastmri_knee.gateway.auth secrets/api_keys 2>/dev/null
 
 up: ## Start the Compose stack (MLflow :5001 plus serving)
+	@test -s secrets/api_keys || { echo "no API keys: run 'make api-key' first"; exit 2; }
 	mkdir -p deploy/model_repository
 	docker compose up -d
 
 up-dev: ## Same, and publish Triton HTTP :8100 / gRPC :8101 on the host
+	@test -s secrets/api_keys || { echo "no API keys: run 'make api-key' first"; exit 2; }
 	mkdir -p deploy/model_repository
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
