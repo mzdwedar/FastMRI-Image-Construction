@@ -1,6 +1,6 @@
 """Export a trained checkpoint to ONNX for Triton and check it matches PyTorch.
 
-    uv run python -m scripts.convert_to_onnx --checkpoint artifacts/model.ckpt
+    uv run python -m fastmri_knee.packaging.export --checkpoint artifacts/model.ckpt
 
 Writes model.onnx into every Triton model directory listed in --model-dirs, then runs
 the same random batch through PyTorch and ONNX Runtime and fails if outputs diverge.

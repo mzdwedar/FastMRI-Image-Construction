@@ -4,7 +4,7 @@ import pytest
 import utils
 from hydra import compose, initialize
 
-from scripts.train import train_fn
+from fastmri_knee.train import train_fn
 
 
 @pytest.mark.training

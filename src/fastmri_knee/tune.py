@@ -13,6 +13,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
 
+from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
 
@@ -92,7 +93,7 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
         pass
     return float(best_score.detach().cpu().item()) if hasattr(best_score, "detach") else float(best_score)
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
+@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name="config")
 def tune_models(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
 

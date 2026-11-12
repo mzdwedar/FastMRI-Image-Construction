@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import pytest
 
-from scripts.convert_to_onnx import export, random_init_checkpoint
+from fastmri_knee.packaging.export import export, random_init_checkpoint
 
 
 @pytest.fixture(scope="session")

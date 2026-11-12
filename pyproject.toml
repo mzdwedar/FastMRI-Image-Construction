@@ -5,6 +5,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fastmri_knee"]
 
+# Ship the Hydra configs inside the wheel so `pip install git+...` (Colab) can run the entrypoints
+[tool.hatch.build.targets.wheel.force-include]
+"configs" = "fastmri_knee/configs"
+
 [project]
 name = "fastmri-knee"
 version = "0.1.0"

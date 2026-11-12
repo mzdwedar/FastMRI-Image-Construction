@@ -8,11 +8,12 @@ from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 
-from scripts import utils
+from fastmri_knee.paths import CONFIG_PATH
+from fastmri_knee import utils
 from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 
-from .config import logger
-from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
+from fastmri_knee.config import logger
+from fastmri_knee.predict import TorchPredictor, get_best_checkpoint, get_best_run_id
 
 
 def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
@@ -38,7 +39,7 @@ def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
 
     return metrics
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
+@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name="config")
 def main(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
     

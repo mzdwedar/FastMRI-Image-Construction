@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 # Directories
-ROOT_DIR = Path(__file__).parent.parent.absolute()
+ROOT_DIR = Path.cwd()  # logs go to ./logs of the working directory, never into site-packages
 LOGS_DIR = Path(ROOT_DIR, "logs")
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 # EFS_DIR = Path(f"/efs/shared_storage/madewithml/{os.environ.get('GITHUB_USERNAME', '')}")

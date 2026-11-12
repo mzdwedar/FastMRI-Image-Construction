@@ -14,6 +14,7 @@ from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 from fastmri_knee.model import UnetModel
 
@@ -124,7 +125,7 @@ def predict_fn(trainer, data: DataLoader, predictor: TorchPredictor):
 
     return predictions
 
-@hydra.main(version_base=None, config_path='../configs', config_name='config')
+@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name='config')
 def main(cfg: DictConfig):
     """
     Perform batch inference on a dataset using a trained model.

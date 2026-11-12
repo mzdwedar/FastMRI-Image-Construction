@@ -1,5 +1,5 @@
 # Serving + monitoring stack. Prerequisite: a checkpoint and its ONNX export
-#   uv run python -m scripts.convert_to_onnx --checkpoint artifacts/model.ckpt
+#   uv run python -m fastmri_knee.packaging.export --checkpoint artifacts/model.ckpt
 #
 #   docker compose up -d --build        # everything
 #   docker compose up -d triton prometheus grafana   # one backend only

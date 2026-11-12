@@ -40,7 +40,7 @@ task that needs them is reached.
   - Verify: full test suite passes with `pythonpath` removed.
   - Deps: none · Files: `src/fastmri_knee/*`, `pyproject.toml`, imports in `scripts/*`, `tests/*/conftest.py`
 
-- [ ] **F5: Move scripts into package entrypoints** — M (pure refactor)
+- [x] **F5: Move scripts into package entrypoints** — M (pure refactor)
   - Do: `scripts/{train,evaluate,tune,predict}.py` → `fastmri_knee/{train,…}.py` (Hydra `config_path` absolute
     to repo `configs/`); `scripts/convert_to_onnx.py` → `fastmri_knee/packaging/export.py`; delete
     `scripts/predict_fastapi.py`, `predict_triton.py` (superseded by gateway), `scripts/` removed.

@@ -22,7 +22,6 @@ RUN uv sync --frozen --no-dev --extra cpu --no-install-project
 
 COPY configs/ configs/
 COPY src/ src/
-COPY scripts/ scripts/
 COPY monitoring/__init__.py monitoring/monitor_metrics.py monitoring/
 COPY deploy/ deploy/
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 
-from scripts.convert_to_onnx import check_parity
+from fastmri_knee.packaging.export import check_parity
 
 MODEL_REPO = Path("deploy/services/triton/models")
 

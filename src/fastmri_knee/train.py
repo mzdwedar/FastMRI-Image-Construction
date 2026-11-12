@@ -14,7 +14,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
 
-from scripts import utils
+from fastmri_knee.paths import CONFIG_PATH
+from fastmri_knee import utils
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
 
@@ -160,7 +161,7 @@ def train_fn(cfg: DictConfig) -> Dict:
     
     return d
 
-@hydra.main(version_base=None, config_path='../configs', config_name='config')
+@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name='config')
 def main(cfg: DictConfig):
     """Main train function to train our model"""
     logging.info("\n" + OmegaConf.to_yaml(cfg))
