@@ -221,7 +221,7 @@ task that needs them is reached.
 
 ## Phase 4 — Inference server (SPEC-inference-server)
 
-- [ ] **T2: Model config hardening** — S
+- [x] **T2: Model config hardening** — S
   - Do: templates gain `default_queue_policy` (REJECT, 5 s), `max_queue_size 256`, `model_warmup` (batch 1 and
     16), instance-count variable; threads from `TRITON_CPUS`.
   - Acceptance: golden files updated; Triton loads the config.

@@ -26,8 +26,29 @@ instance_group [ { kind: KIND_GPU, count: ${instances} } ]
 dynamic_batching {
   preferred_batch_size: [ 4, 8, 16 ]
   max_queue_delay_microseconds: ${queue_delay_us}  # wait up to this long to fill a batch
+  # Backpressure: shed load instead of queueing without bound (clients see UNAVAILABLE -> gateway 503)
+  default_queue_policy {
+    timeout_action: REJECT
+    default_timeout_microseconds: 5000000  # reject requests that waited > 5 s
+    max_queue_size: 256
+  }
 }
 ${optimization}
 # Host-side ORT threads (pre/post-processing around the GPU kernels)
 parameters { key: "intra_op_thread_count" value: { string_value: "${intra_threads}" } }
 parameters { key: "inter_op_thread_count" value: { string_value: "${inter_threads}" } }
+
+# Run batch 1 and a full batch through the model at load so the first real request is not cold.
+# (Zero data: only exercises the graph; dims exclude the batch dimension.)
+model_warmup [
+  {
+    name: "batch_1"
+    batch_size: 1
+    inputs { key: "input" value: { data_type: TYPE_FP32 dims: [ 1, 320, 320 ] zero_data: true } }
+  },
+  {
+    name: "batch_16"
+    batch_size: 16
+    inputs { key: "input" value: { data_type: TYPE_FP32 dims: [ 1, 320, 320 ] zero_data: true } }
+  }
+]
