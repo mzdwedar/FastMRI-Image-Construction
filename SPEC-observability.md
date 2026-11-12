@@ -58,6 +58,25 @@ trace context forwarded to Triton in gRPC metadata; Triton `--trace-config mode=
 request/compute spans to Alloy. Sampling: parent-based, ratio `OTEL_TRACES_SAMPLER_ARG` (1.0 in dev, 0.1 default);
 errors and requests slower than 2 s are always kept (Alloy tail sampling).
 
+**O9 finding (2026-11-12): Triton propagates the trace context, so the plan stands (no fallback).** Spike on
+`tritonserver:24.08-py3` (arm64), `unet_model` on ONNX Runtime CPU, an OTel Collector with the debug exporter:
+
+- Flags: `--trace-config mode=opentelemetry --trace-config opentelemetry,url=<alloy>:4318/v1/traces
+  --trace-config rate=1 --trace-config level=TIMESTAMPS --trace-config count=-1`. The exporter is OTLP/HTTP, so Alloy
+  needs the HTTP receiver on 4318 (the gateway can use gRPC 4317).
+- A gRPC `infer` carrying `traceparent` metadata produced three Triton spans under the caller's trace id:
+  `InferRequest` (its parent is the caller's span id) > `unet_model` (events `REQUEST_START`, `QUEUE_START`,
+  `REQUEST_END`) > `compute` (`COMPUTE_START`, `COMPUTE_INPUT_END`, `COMPUTE_OUTPUT_START`, `COMPUTE_END`). Queue wait
+  and compute time are therefore visible per request. `service.name` is `triton-inference-server`.
+- gRPC metadata keys must be lowercase (`traceparent`); the Python client rejects `Traceparent` before sending.
+  The gateway passes it through `infer(..., headers={"traceparent": ...})`.
+- A request without `traceparent` gets a fresh root trace (never an error).
+- **Triton ignores the sampled flag.** A `traceparent` ending `-00` was still traced and exported. With `rate=1`
+  every request produces Triton spans, so the gateway's head sampling (ratio 0.1) does not reduce Triton's span volume.
+  O8 must therefore run the keep/drop decision in Alloy's tail sampling for the whole trace (errors, > 2 s, plus a
+  probabilistic share), and must not assume a trace is complete or absent just because the gateway did not sample it.
+  Not tested: a Triton `rate` above 1 combined with a propagated context, and Alloy's tail-sampling behaviour.
+
 ### SLOs (initial targets; calibrated after gateway baseline; changes require approval)
 
 | SLO | SLI | Target | Window |

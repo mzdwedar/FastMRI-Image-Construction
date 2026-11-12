@@ -378,7 +378,7 @@ task that needs them is reached.
   - Verify: `make up`; `logcli`/Grafana Explore query.
   - Deps: O2, O3 · Files: `docker-compose.yml`, `monitoring/alloy/config.alloy`, `monitoring/loki/config.yml`, `monitoring/grafana/provisioning/datasources/*.yml`
 
-- [ ] **O9: Spike — Triton OpenTelemetry context propagation** — S
+- [x] **O9: Spike — Triton OpenTelemetry context propagation** — S
   - Do: enable `--trace-config mode=opentelemetry` to a local collector; send gRPC request with `traceparent`
     metadata; confirm Triton spans share the trace id.
   - Acceptance: finding recorded in SPEC-observability (works / fallback chosen).
