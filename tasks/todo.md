@@ -272,7 +272,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_infer.py`; manual curl against `make up` Triton.
   - Deps: G1, P6 · Files: `src/fastmri_knee/gateway/{triton_client,routes}.py`, `tests/unit/gateway/{fakes,test_infer}.py`
 
-- [ ] **G3: Readiness loop, `/readyz`, `/v1/model`** — S
+- [x] **G3: Readiness loop, `/readyz`, `/v1/model`** — S
   - Do: background task polls model readiness + version every 2 s; `/readyz` reads cache with `{reason}`;
     `/v1/model` returns version + card (from registry tag or Triton metadata); `X-Model-Version` header.
   - Acceptance: not-ready reasons `triton_unreachable` / `model_not_ready`; flips within 10 s.
@@ -576,10 +576,11 @@ so the decision isn't lost.
   - Recommendation: delete.
   - Trigger: F6 · Blocks: F6 (cleanup step only)
 
-- [ ] **Q5: Per-slice max normalization and the response format**
+- [x] **Q5: Per-slice max normalization and the response format**
   - Context: preprocessing divides each slice by its max, so outputs are on a relative [0, 1] scale.
   - Options: (a) keep, return `scale` attribute so clients can restore intensity; (b) change normalization (retrain).
   - Recommendation: (a).
+  - **Decided 2026-11-12: (a)** — keep per-slice max; the response carries a per-slice `scale` attribute.
   - Trigger: F7 / G4 · Blocks: G4 (response schema) · Spec: SPEC-foundation OQ3
 
 - [x] **Q6: MLflow version and backend**
@@ -606,9 +607,10 @@ so the decision isn't lost.
   - Recommendation: drop.
   - Trigger: G6 · Blocks: G6 · Spec: SPEC.md OQ3
 
-- [ ] **Q10: Keep the `acceleration` demo parameter on `/v1/reconstructions`?**
+- [x] **Q10: Keep the `acceleration` demo parameter on `/v1/reconstructions`?**
   - Context: lets fully sampled files simulate undersampled scanner input.
   - Recommendation: keep, documented as a demo feature.
+  - **Decided 2026-11-12: keep**, optional `acceleration` query param, off by default, documented as a demo feature in OpenAPI.
   - Trigger: G4 · Blocks: G4 · Spec: SPEC-gateway OQ2
 
 - [ ] **Q11: Alertmanager receivers**

@@ -100,4 +100,4 @@ curl -H "X-API-Key: $KEY" -F file=@tests/fixtures/synthetic.h5 localhost:8000/v1
 1. Async job API (`POST` returns 202 + job id) for large volumes? Proposal: not needed at ≤ 64 slices and seconds
    of latency; revisit if p95 > 10 s.
 2. Keep the `acceleration` demo parameter? It lets a fully sampled dataset show realistic undersampled input.
-   Proposal: keep, marked as a demo feature in the OpenAPI description.
+   Proposal: keep, marked as a demo feature in the OpenAPI description. **Decided 2026-11-12: keep.**
