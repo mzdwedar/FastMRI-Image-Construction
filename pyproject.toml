@@ -56,6 +56,8 @@ gateway = [
     "psutil>=5.9.8",
     "pillow>=11.3.0",
     "pydantic>=2.11.9",
+    "pydantic-settings>=2.3",
+    "structlog>=24.1",
     "tritonclient[grpc,http]>=2.45.0",
     "grpcio>=1.60.0",
     "protobuf>=5.27.0",
@@ -114,7 +116,7 @@ markers = [
 ]
 
 [tool.mypy]
-files = ["src/fastmri_knee/preprocess.py", "src/fastmri_knee/packaging"]  # gateway/ is added in G1
+files = ["src/fastmri_knee/preprocess.py", "src/fastmri_knee/packaging", "src/fastmri_knee/gateway"]
 strict = true
 
 [[tool.mypy.overrides]]

@@ -251,7 +251,7 @@ task that needs them is reached.
 
 ## Phase 5 — Gateway (SPEC-gateway)
 
-- [ ] **G1: Gateway skeleton** — M
+- [x] **G1: Gateway skeleton** — M
   - Do: `gateway/app.py` (app factory, lifespan), `settings.py` (pydantic-settings, `GATEWAY_` prefix), request-id
     middleware, problem+json handlers, `/healthz`, structlog JSON baseline.
   - Acceptance: invalid settings fail startup; unknown errors → 500 problem+json without internals; `X-Request-ID` echoed/generated.
