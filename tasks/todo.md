@@ -194,19 +194,26 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_sync.py`.
   - Deps: P2, P4, T1 · Files: `src/fastmri_knee/packaging/{triton_repo,sync}.py`, `tests/unit/packaging/test_sync.py`
 
-- [ ] **P6: `promote` and `rollback` with gates** — M
+- [x] **P6: `promote` and `rollback` with gates** — M
   - Do: gates (preprocess mismatch, PSNR −0.5 dB, random-init → production unless `--allow-random`), `--force`
     logged; `previous_production` tag; rollback skips PSNR gate; Makefile targets.
   - Acceptance: each gate refuses with a clear message; rollback restores previous.
   - Verify: `uv run pytest tests/unit/packaging/test_promote.py`.
+  - Done: preprocess gate is never bypassable; `--force` overrides the PSNR and random-init gates (logged, tagged
+    `promote_forced`) so the checkpoint command works on random-init models; a candidate without PSNR is refused when
+    production has one; non-production aliases only move the alias (no sync); a failed sync restores alias and tag.
+    Live on arm64: no-force refused; v1 → v2 → rollback → v1 served; corrupt ONNX refused with v1 still serving.
   - Deps: P5 · Files: `src/fastmri_knee/packaging/promote.py`, `src/fastmri_knee/packaging/__main__.py`, `Makefile`, `tests/unit/packaging/test_promote.py`
 
-- [ ] **P7: Packaging integration tests against Triton** — M
+- [x] **P7: Packaging integration tests against Triton** — M
   - Do: session fixture runs Triton (`docker run`, empty repo, explicit mode) + temp MLflow; tests: promote v1 → v2
     → rollback; corrupt ONNX → v2 keeps serving.
   - Acceptance: tests pass locally (or in CI if arm64 fallback applies).
   - Verify: `make test-integration`.
   - Deps: P6 · Files: `tests/integration/conftest.py`, `tests/integration/test_packaging_triton.py`
+  - Done: one test, ~11 s on arm64 with real Triton 24.08 (random host port, empty tmp repo, explicit mode) and a file-store
+    registry of 3 random-init versions: promote v1 → v2 (v1 unready) → rollback (v1 ready) → v3 with corrupted ONNX refused on
+    sha256, production stays v1 and serving. Skips if Docker or the image is absent (`TRITON_IMAGE` overrides).
 
 ### ✅ Checkpoint: Packaging — `make up model-random && make promote VERSION=1 ALIAS=production FORCE=1` → Triton serves v1; P7 green
 
@@ -214,7 +221,7 @@ task that needs them is reached.
 
 ## Phase 4 — Inference server (SPEC-inference-server)
 
-- [ ] **T2: Model config hardening** — S
+- [x] **T2: Model config hardening** — S
   - Do: templates gain `default_queue_policy` (REJECT, 5 s), `max_queue_size 256`, `model_warmup` (batch 1 and
     16), instance-count variable; threads from `TRITON_CPUS`.
   - Acceptance: golden files updated; Triton loads the config.
@@ -251,7 +258,7 @@ task that needs them is reached.
 
 ## Phase 5 — Gateway (SPEC-gateway)
 
-- [ ] **G1: Gateway skeleton** — M
+- [x] **G1: Gateway skeleton** — M
   - Do: `gateway/app.py` (app factory, lifespan), `settings.py` (pydantic-settings, `GATEWAY_` prefix), request-id
     middleware, problem+json handlers, `/healthz`, structlog JSON baseline.
   - Acceptance: invalid settings fail startup; unknown errors → 500 problem+json without internals; `X-Request-ID` echoed/generated.

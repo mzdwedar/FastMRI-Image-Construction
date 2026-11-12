@@ -43,3 +43,18 @@ def test_profiles_differ_where_they_should():
 def test_invalid_combinations_are_rejected(kwargs):
     with pytest.raises(ValueError):
         render(version=1, **kwargs)
+
+
+@pytest.mark.parametrize("profile", ["cpu", "gpu"])
+def test_batched_profiles_have_queue_policy_and_warmup(profile):
+    text = render(profile, version=1)
+    assert "timeout_action: REJECT" in text
+    assert "default_timeout_microseconds: 5000000" in text
+    assert "max_queue_size: 256" in text
+    assert "batch_size: 1\n" in text and "batch_size: 16\n" in text
+    assert "zero_data: true" in text
+
+
+def test_nobatch_baseline_is_left_unhardened():
+    text = render("nobatch", version=1)
+    assert "default_queue_policy" not in text and "model_warmup" not in text
