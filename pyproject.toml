@@ -27,14 +27,14 @@ train = [
     "torch>=2.2",
     "pytorch-lightning>=2.2",
     "torchmetrics>=1.3",
-    "segmentation-models-pytorch==0.3.3",
+    "segmentation-models-pytorch==0.6.0",
     "six>=1.16",  # undeclared dependency of pretrainedmodels (via smp); fails to import on a clean env without it
     "omegaconf>=2.3.0",
     "hydra-core>=1.3.2",
-    "mlflow==2.12.1",
-    "setuptools<81",  # mlflow 2.12.1 imports pkg_resources; drop with an MLflow upgrade
+    "mlflow==3.18.0",
+    "setuptools<85",  # mlflow 2.12.1 imports pkg_resources; drop with an MLflow upgrade
     "fastmri>=0.3.0",
-    "optuna==3.6.0",
+    "optuna==5.0.0",
     "optuna-integration>=3.6.0",  # tune.py imports optuna.integration, which moved out of optuna
     "tqdm>=4.66",
 ]
