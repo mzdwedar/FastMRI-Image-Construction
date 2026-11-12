@@ -253,9 +253,12 @@ task that needs them is reached.
     taken with Docker's 8 GB VM; an earlier run with observability containers running gave only ~10 req/s.
   - Deps: T2, P5 · Files: `benchmarks/load_test.py`, `benchmarks/compare.py`, `benchmarks/baselines/cpu.json`, `Makefile`, `SPEC-inference-server.md`
 
-- [ ] **T5: GPU Compose override** — S
+- [x] **T5: GPU Compose override** — S
   - Do: `docker-compose.gpu.yml` (nvidia device reservation, `TRITON_PROFILE=gpu`); README manual check section.
   - Acceptance/Verify: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` validates.
+  - **Done (2026-11-12):** `docker-compose.gpu.yml` reserves one NVIDIA device for Triton; `make check-configs` (so the
+    CI `configs` job) validates the merged file. `TRITON_PROFILE` is read by `make sync` on the host, not by the container,
+    so the override does not set it; README says to run `TRITON_PROFILE=gpu make sync`. Not run on a GPU (S8 deferred).
   - Deps: T1 (manual GPU check: S8, deferred) · Files: `docker-compose.gpu.yml`, `README.md`
 
 - [x] **C3: Integration job in CI** — S · done 2026-11-12: first run green in 7m27s (11 passed, 0 skipped; pytest 65 s;

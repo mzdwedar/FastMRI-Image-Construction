@@ -309,6 +309,22 @@ Notes:
 - `configs/triton.yaml` defines inputs/outputs, model name, and server URL.
 - Ensure the ONNX I/O names match those in `config.pbtxt` (`input`/`output`).
 
+### Serving on a GPU (manual check)
+
+Needs a Linux host with an NVIDIA GPU, the driver and the NVIDIA Container Toolkit (not available on Docker Desktop for
+macOS, and not run in CI; CI only validates the Compose file).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+TRITON_PROFILE=gpu make sync     # renders the gpu template (KIND_GPU, ORT CUDA EP) and loads it
+make bench NAME=gpu              # compare with benchmarks/baselines/cpu.json
+```
+
+Check that `nvidia-smi` inside the Triton container lists the GPU and that `/v2/models/unet_model/config` shows
+`KIND_GPU`. Batching delay on GPU is 2 ms and has not been measured (T4 measured CPU only); TensorRT/FP16 are
+`gpu`-profile options in `fastmri_knee.packaging.triton_repo.render`. Record the first GPU numbers as a new baseline
+(`benchmarks/baselines/gpu.json`) before changing any default.
+
 ### Monitoring
 - One Prometheus (`monitoring/prometheus/prometheus.yml`) scrapes the gateway, Triton, Alertmanager, node-exporter and cAdvisor.
 - Alerts go to Alertmanager (:9093), whose default receiver is `alert-sink`; set `SLACK_WEBHOOK_URL` in `.env` to add Slack.

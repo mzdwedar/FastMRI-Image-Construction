@@ -72,6 +72,7 @@ TEMPO_IMAGE ?= grafana/tempo:2.5.0
 
 check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and Alertmanager config (needs Docker)
 	docker compose config -q
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml config -q
 	docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
 		check config /etc/prometheus/prometheus.yml
 	@if ls monitoring/prometheus/rules/*.yml >/dev/null 2>&1; then \
