@@ -21,7 +21,6 @@ CARD_FIELDS = {
 def store(tmp_path):
     uri = f"file://{tmp_path}/mlruns"
     mlflow.set_tracking_uri(uri)
-    mlflow.set_registry_uri(uri)
     return uri
 
 
