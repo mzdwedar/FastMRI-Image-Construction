@@ -165,4 +165,4 @@ open http://localhost:3000   # Grafana  ·  :9090 Prometheus  ·  :9093 Alertman
 
 ## Open questions
 
-1. Alertmanager default receiver: local `alert-sink` only (proposal) or also email? Email needs SMTP credentials.
+1. ~~Alertmanager default receiver~~ Decided (Q11, 2026-11-12): local `alert-sink` by default, Slack when `SLACK_WEBHOOK_URL` is set, no email.

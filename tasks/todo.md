@@ -358,7 +358,7 @@ task that needs them is reached.
   - Acceptance: all targets `up` in Prometheus; `make check-configs` passes.
   - Verify: `make up check-configs`; Prometheus `/targets`.
   - Done 2026-11-12. Built on the Q11 recommendation (alert-sink default, Slack only when `SLACK_WEBHOOK_URL` is set);
-    Q11 and S2 are still unticked pending the owner's confirmation. Six targets `up` on Docker Desktop (8 GB); new
+    Q11 and S2 were confirmed by the owner afterwards. Six targets `up` on Docker Desktop (8 GB); new
     services are capped at 64-256 MiB. cAdvisor (v0.52.1) cannot name containers under Docker's containerd image
     store, so its series carry the cgroup `id` only: O4's container alerts must key on `id` (or add a mapping).
   - Deps: G6, Q11, S2 (S5 if Slack) · Files: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`, `monitoring/alertmanager/alertmanager.yml`, `monitoring/alert-sink/` , `Makefile`
@@ -681,9 +681,11 @@ so the decision isn't lost.
   - **Decided 2026-11-12: keep**, optional `acceleration` query param, off by default, documented as a demo feature in OpenAPI.
   - Trigger: G4 · Blocks: G4 · Spec: SPEC-gateway OQ2
 
-- [ ] **Q11: Alertmanager receivers**
+- [x] **Q11: Alertmanager receivers**
   - Options: local `alert-sink` only (used by e2e) · plus Slack (needs S5) · plus email (needs SMTP).
   - Recommendation: `alert-sink` default, Slack enabled only when `SLACK_WEBHOOK_URL` is set.
+  - → Decided 2026-11-12: recommendation accepted. `alert-sink` default, Slack only when `SLACK_WEBHOOK_URL` is set, no email.
+    Slack config is validated by `make check-configs`; no real Slack message has been sent (S5).
   - Trigger: O3 · Blocks: O3 · Spec: SPEC-observability OQ1
 
 - [x] **Q12: Calibrate SLO targets**
@@ -731,10 +733,13 @@ so the decision isn't lost.
   - Do: `uv sync --extra dev` (before F6) / `make setup` (after F6).
   - Trigger: F1 (first task that runs code)
 
-- [ ] **S2: Docker resources for the full stack**
+- [x] **S2: Docker resources for the full stack**
   - Context: Docker Desktop has 8 GB RAM / 11 CPUs. Triton (4 GB limit) + gateway + MLflow + 8 observability
     services will be tight.
   - Do: raise Docker Desktop memory to ≥ 12 GB, or accept an observability Compose profile that is off by default.
+  - → Decided 2026-11-12: keep 8 GB, no Compose profile. Idle use is about 2.6 GiB of 7.65 GiB (Triton 1.1 of its 4 GiB,
+    MLflow 0.7, observability about 0.7); worst case with Triton at its limit is about 6.5 GiB. Triton's peak under load
+    was not measured. Revisit (12 GB) if a trained model grows Triton or `ContainerMemoryHigh` fires.
   - Trigger: T1 (tight), O3 (required)
 
 - [x] **S3: A trained checkpoint for compatibility checks**
