@@ -1,0 +1,104 @@
+{
+  "model": "unet_model_nobatch",
+  "payload": {
+    "slices_per_request": 1,
+    "shape": [
+      1,
+      1,
+      320,
+      320
+    ],
+    "dtype": "float32"
+  },
+  "step": {
+    "warmup_s": 5,
+    "duration_s": 30
+  },
+  "client_host": {
+    "machine": "arm64",
+    "system": "Darwin"
+  },
+  "started": "2026-11-12T18:20:38+0100",
+  "steps": [
+    {
+      "concurrency": 1,
+      "requests": 399,
+      "errors": 0,
+      "throughput_rps": 13.3,
+      "latency_ms": {
+        "mean": 75.2,
+        "p50": 74.5,
+        "p90": 77.9,
+        "p95": 80.6,
+        "p99": 106.6
+      }
+    },
+    {
+      "concurrency": 2,
+      "requests": 446,
+      "errors": 0,
+      "throughput_rps": 14.87,
+      "latency_ms": {
+        "mean": 134.9,
+        "p50": 130.6,
+        "p90": 144.3,
+        "p95": 158.0,
+        "p99": 230.3
+      }
+    },
+    {
+      "concurrency": 4,
+      "requests": 448,
+      "errors": 0,
+      "throughput_rps": 14.93,
+      "latency_ms": {
+        "mean": 268.0,
+        "p50": 258.0,
+        "p90": 293.7,
+        "p95": 315.3,
+        "p99": 349.7
+      }
+    },
+    {
+      "concurrency": 8,
+      "requests": 448,
+      "errors": 0,
+      "throughput_rps": 14.93,
+      "latency_ms": {
+        "mean": 533.4,
+        "p50": 511.4,
+        "p90": 573.6,
+        "p95": 591.5,
+        "p99": 618.5
+      }
+    },
+    {
+      "concurrency": 16,
+      "requests": 453,
+      "errors": 0,
+      "throughput_rps": 15.1,
+      "latency_ms": {
+        "mean": 1059.9,
+        "p50": 1045.9,
+        "p90": 1128.0,
+        "p95": 1141.0,
+        "p99": 1242.2
+      }
+    },
+    {
+      "concurrency": 32,
+      "requests": 469,
+      "errors": 0,
+      "throughput_rps": 15.63,
+      "latency_ms": {
+        "mean": 2049.7,
+        "p50": 2046.9,
+        "p90": 2068.2,
+        "p95": 2071.9,
+        "p99": 2080.0
+      }
+    }
+  ],
+  "note": "median of 3 runs, 2026-11-12; Docker Desktop 8 GB / 11 CPUs, Triton limited to 4 CPUs, random-init U-Net, profile nobatch, 1 instance x 4 ORT threads, observability containers stopped; served as unet_model_nobatch",
+  "runs": 3
+}

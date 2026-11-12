@@ -55,7 +55,7 @@ def check_response(resp: httpx.Response) -> None:
 
 
 async def run_step(client, req, concurrency, warmup_s, duration_s):
-    latencies, errors = [], 0
+    latencies, errors, error_kinds = [], 0, set()
     t_start = time.perf_counter()
     t_measure, t_end = t_start + warmup_s, t_start + warmup_s + duration_s
 
@@ -68,8 +68,9 @@ async def run_step(client, req, concurrency, warmup_s, duration_s):
                 done = time.perf_counter()
                 if now >= t_measure:
                     latencies.append(done - now)
-            except Exception:
+            except Exception as exc:
                 errors += 1
+                error_kinds.add(f"{type(exc).__name__}: {str(exc)[:120]}")
 
     await asyncio.gather(*(worker() for _ in range(concurrency)))
     lat_ms = np.array(latencies) * 1000
@@ -77,6 +78,7 @@ async def run_step(client, req, concurrency, warmup_s, duration_s):
         "concurrency": concurrency,
         "requests": len(latencies),
         "errors": errors,
+        "error_kinds": sorted(error_kinds),
         "throughput_rps": len(latencies) / duration_s,
         "latency_ms": {
             "mean": float(lat_ms.mean()) if len(lat_ms) else None,
