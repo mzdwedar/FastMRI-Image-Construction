@@ -107,7 +107,7 @@ make train       uv run python -m fastmri_knee.train
    needs no bump. Two undeclared dependencies surfaced on a clean 3.12 env and must be declared in F6:
    `six` (needed by `pretrainedmodels`, pulled in by smp) and `setuptools<81` (`mlflow==2.12.1` imports
    `pkg_resources`; goes away if MLflow is upgraded per SPEC-model-packaging req 1).
-   `requires-python` should be `>=3.10,<3.14` so it covers whatever Colab runs. **Not yet verified:** Colab's actual
+   `requires-python` is `>=3.10,<3.13` (F6): `onnxruntime==1.17.3` has no 3.13 wheels and `uv lock` fails above that; if Colab moves to 3.13, upgrade onnxruntime first. **Not yet verified:** Colab's actual
    Python version (run `!python --version` there in K2) and ONNX/Triton behaviour on 3.12 (covered by P-phase tests).
 3. Normalization divides by the per-slice max, so absolute intensity is lost in the output. Acceptable for this
    project? (Affects the API response: we return normalized images plus the scale factor as an attribute.)

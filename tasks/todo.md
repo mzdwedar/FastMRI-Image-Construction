@@ -50,7 +50,7 @@ task that needs them is reached.
   - Verify: serving + unit tests pass; `training` test still collects.
   - Deps: F4 · Files: `src/fastmri_knee/{train,evaluate,tune,predict}.py`, `src/fastmri_knee/packaging/export.py`, `tests/serving/*`
 
-- [ ] **F6: Dependency extras, single env, Makefile** — M
+- [x] **F6: Dependency extras, single env, Makefile** — M
   - Do: split extras `train/export/gateway`, core `numpy,h5py`, `[dependency-groups] dev`; set Python per F1;
     regenerate `uv.lock`; Makefile targets from SPEC-foundation; `.env.example`; delete `.venv-cpu/-dev/-gpu` (ask).
   - Acceptance: `rm -rf .venv && make setup` works from the lockfile; `make help` lists targets.
@@ -515,7 +515,7 @@ so the decision isn't lost.
   - Recommendation: delete unless you know what writes it.
   - Trigger: F3 · Blocks: F3 (only that file)
 
-- [ ] **Q4: Delete the extra venvs `.venv-cpu`, `.venv-dev`, `.venv-gpu`?**
+- [x] **Q4: Delete the extra venvs `.venv-cpu`, `.venv-dev`, `.venv-gpu`?** → decided 2026-11-12: leave them alone (F6 did not touch them)
   - Context: replaced by one `.venv` with extras; `.venv-dev` already points to a missing interpreter.
   - Recommendation: delete.
   - Trigger: F6 · Blocks: F6 (cleanup step only)
