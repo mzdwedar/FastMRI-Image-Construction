@@ -250,7 +250,9 @@ task that needs them is reached.
   - Acceptance/Verify: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` validates.
   - Deps: T1 (manual GPU check: S8, deferred) · Files: `docker-compose.gpu.yml`, `README.md`
 
-- [ ] **C3: Integration job in CI** — S
+- [x] **C3: Integration job in CI** — S · done 2026-11-12: first run green in 7m27s (11 passed, 0 skipped; pytest 65 s;
+  runner had 110 GB free, so the disk-cleanup step is optional). Drill: a broken `cpu.pbtxt` input name failed the job
+  at "Integration tests" (Triton never ready; run 43250942165). Remaining for you: make `integration` a required check (S10).
   - Do: `e2e.yml` with `integration` job (Docker available, image cache).
   - Acceptance: green; required check.
   - Verify: push; drill with a broken template fails it.
