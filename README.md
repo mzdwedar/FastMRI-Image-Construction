@@ -267,42 +267,18 @@ python -m fastmri_knee.predict --config configs/config.yaml \
   trainer.predict.data_path=./data/test
 ```
 
-### Serving Option 1: FastAPI
-Endpoints:
-- `GET /health/`
-- `POST /predict/` (multipart form with single `.h5` under field `file`)
-- `POST /evaluate/` (multipart with multiple `.h5` files under field `files`)
-- `GET /metrics` (Prometheus)
-
-Run locally (direct module):
+### Serving: gateway (FastAPI) in front of Triton
+The gateway is torch-free and talks to Triton over gRPC (see SPEC-gateway.md). Endpoints:
+- `GET /healthz`, `GET /readyz` (no auth)
+- `POST /v1/reconstructions` (multipart `.h5` under field `file`; optional demo query `acceleration`) -> `.h5`
+- `POST /v1/infer` (raw float32 N x 1 x 320 x 320), `GET /v1/model`
+- `/evaluate` and `/predict` were dropped (Q9); evaluation is offline.
 
 ```bash
-# Important: pass the checkpoint path argument
-python -m deploy.services.fastapi.main --checkpoint_path <PATH_TO_CKPT> \
-  --host 0.0.0.0 --port 8000
+make api-key        # prints a key once; stores only its hash in secrets/api_keys
+make up             # gateway :8000, Triton, MLflow, Prometheus, Grafana
+curl -H "X-API-Key: $KEY" -F file=@sample.h5 localhost:8000/v1/reconstructions -o out.h5
 ```
-
-Client example: the FastAPI client script was removed; the gateway (see SPEC-gateway.md) replaces it.
-
-With Prometheus + Grafana via compose in this repo directory:
-
-```bash
-docker compose -f deploy/services/fastapi/docker-compose.yml up -d --build \
-  --env-file <(printf 'checkpoint_path=%s\n' "<PATH_TO_CKPT>")
-
-# Prometheus: http://localhost:9090
-# Grafana:    http://localhost:3000  (admin/admin)
-```
-
-Tear down:
-
-```bash
-docker compose -f deploy/services/fastapi/docker-compose.yml down
-```
-
-Notes:
-- The FastAPI app instruments default HTTP metrics via `prometheus_fastapi_instrumentator`.
-- Checkpoint path must be accessible in the container if using Docker (use bind mounts or bake into image).
 
 ### Serving Option 2: Triton
 1) Export ONNX from a trained checkpoint:

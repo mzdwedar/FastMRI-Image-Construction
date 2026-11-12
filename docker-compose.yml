@@ -4,26 +4,47 @@
 #   docker compose up -d --build        # everything
 #   docker compose up -d triton prometheus grafana   # one backend only
 #
-# FastAPI :8000   Triton: no host ports by default; `make up-dev` publishes HTTP :8100 / gRPC :8101
+# Gateway :8000   Triton: no host ports by default; `make up-dev` publishes HTTP :8100 / gRPC :8101
 # MLflow :5001   Prometheus :9090   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
 
 x-cpu-limit: &cpu-limit
-  cpus: "${SERVER_CPUS:-4}"   # both backends get the same CPU budget
+  cpus: "${SERVER_CPUS:-4}"   # CPU budget for the gateway
 
 services:
-  fastapi:
+  gateway:
     build:
       context: .
-      dockerfile: deploy/services/fastapi/Dockerfile
-    image: fastmri-fastapi:latest
+      dockerfile: deploy/gateway/Dockerfile
+      args:
+        GIT_SHA: "${GIT_SHA:-unknown}"
+    image: fastmri-gateway:latest
     environment:
-      CHECKPOINT_PATH: /artifacts/model.ckpt
-      NUM_THREADS: "${SERVER_CPUS:-4}"
-    volumes:
-      - ./artifacts:/artifacts:ro
+      GATEWAY_ENV: prod
+      GATEWAY_TRITON_URL: triton:8001
+      GATEWAY_WORKERS: "${GATEWAY_WORKERS:-2}"
+      GATEWAY_MAX_INFLIGHT: "${GATEWAY_MAX_INFLIGHT:-32}"
+      GATEWAY_TMP_DIR: /tmp
+    secrets:
+      - source: api_keys
+        target: api_keys   # -> /run/secrets/api_keys; create it with `make api-key`
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m   # uploads are spooled here, so size >= max upload x concurrent requests it must hold
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    depends_on:
+      - triton
+    restart: unless-stopped
     ports:
       - "8000:8000"
     <<: *cpu-limit
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
   triton:
     image: "${TRITON_IMAGE:-nvcr.io/nvidia/tritonserver:24.08-py3}"
@@ -102,6 +123,10 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+
+secrets:
+  api_keys:
+    file: ./secrets/api_keys
 
 volumes:
   mlflow_data:

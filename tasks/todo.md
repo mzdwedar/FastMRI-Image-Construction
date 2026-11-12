@@ -294,7 +294,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_auth.py tests/unit/gateway/test_backpressure.py`.
   - Deps: G4, S6 · Files: `src/fastmri_knee/gateway/{auth,limits}.py`, `tests/unit/gateway/test_auth.py`, `tests/unit/gateway/test_backpressure.py`
 
-- [ ] **G6: Gateway image and Compose wiring; remove old backend** — M · needs Q9
+- [x] **G6: Gateway image and Compose wiring; remove old backend** — M · needs Q9
   - Do: `deploy/gateway/Dockerfile` (multi-stage uv, 3.12-slim, uid 10001, labels), gunicorn+uvicorn workers,
     Compose service (read-only rootfs, tmpfs `/tmp`, secrets file, healthcheck); delete
     `deploy/services/fastapi/`, `tests/serving/test_api.py`, `monitoring/monitor_metrics.py` usage by old app.
@@ -602,9 +602,10 @@ so the decision isn't lost.
   - Recommendation: current release if it has arm64 and passes T3; decide with T1 evidence.
   - Trigger: T1 · Blocks: T1 · Spec: SPEC-inference-server req 6
 
-- [ ] **Q9: Drop `/evaluate` (and `/predict`) from the serving API?**
+- [x] **Q9: Drop `/evaluate` (and `/predict`) from the serving API?**
   - Context: needs ground truth and torchmetrics; the gateway is torch-free. Becomes offline `make evaluate`.
   - Recommendation: drop.
+  - **Decided 2026-11-12: drop** `/evaluate` and `/predict`; evaluation is offline.
   - Trigger: G6 · Blocks: G6 · Spec: SPEC.md OQ3
 
 - [x] **Q10: Keep the `acceleration` demo parameter on `/v1/reconstructions`?**

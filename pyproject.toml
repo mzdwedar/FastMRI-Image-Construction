@@ -107,7 +107,7 @@ extend-immutable-calls = ["fastapi.File", "fastapi.Depends"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Temporary: the legacy FastAPI app (deploy/services/fastapi) is imported as `deploy.*` until task G6 replaces it
+# `tests.fixtures` is imported from the repo root
 pythonpath = ["."]
 markers = [
     "integration: needs Docker (real Triton container)",
