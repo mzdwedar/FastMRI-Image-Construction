@@ -128,7 +128,10 @@ task that needs them is reached.
   - Verify: `curl localhost:5001/health`; run appears in UI.
   - Deps: F6, Q6 · Files: `docker-compose.yml`, `.env.example`, `pyproject.toml`/`uv.lock`, `configs/trainer.yaml`
 
-- [ ] **P2: `register` command with model card** — M
+- [x] **P2: `register` command with model card** — M
+  - Done 2026-11-12: `python -m fastmri_knee.packaging register --checkpoint PATH [--summary PATH] [--run-id ID]`. 5 unit tests
+    on a temp file store; also run once against Compose MLflow (version 1 READY, tags set). Not in P2: `make register`
+    target and `promote`/`sync` (later tasks). `--run-id` only adds that run's val metrics; the checkpoint is still passed by path.
   - Do: `packaging/registry.py`: export → parity (refuse > 1e-4) → `model_card.json` (all spec fields) →
     new version of `fastmri-unet` with onnx, ckpt, card; tags `preprocess_version`, `git_sha`.
   - Acceptance: unit tests on a temp file store: artifacts present, card fields correct, parity failure refuses.
