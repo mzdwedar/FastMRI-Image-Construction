@@ -445,9 +445,15 @@ task that needs them is reached.
     model, then run these).
   - Deps: O4, O8, O10 · Files: `tests/e2e/test_observability.py`, `tests/e2e/conftest.py`
 
-- [ ] **C5: Configs job in CI** — S
+- [x] **C5: Configs job in CI** — S
   - Do: `configs` job: `make check-configs`, dashboards diff, hadolint, actionlint; make it required.
   - Acceptance/Verify: green; drill with a broken alert rule fails it.
+  - **Done (2026-11-12):** `configs` job in `ci.yml` (about 30 s): `make check-configs`, new `make hadolint`, and
+    `make dashboards` + `git diff --exit-code`. actionlint already had its own job. Drills on throwaway PRs #47-#49: a
+    broken alert rule, a stale dashboard and an unpinned `apt-get install` each failed only `configs`. `check-configs`
+    now mounts directories instead of single files (Docker Desktop served stale single-file mounts). `make dashboards`
+    uses plain `python3` (stdlib only), so the job needs no uv. **Not done:** marking `configs` a required check is a
+    GitHub branch-protection setting; I did not change it.
   - Deps: O3, C1 · Files: `.github/workflows/ci.yml`
 
 ### ✅ Checkpoint: Observability — SPEC.md criteria 3, 4 pass in e2e; all alerts have tests + runbooks; human review

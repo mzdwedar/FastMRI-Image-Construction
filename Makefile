@@ -81,11 +81,11 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		docker run --rm --entrypoint /bin/sh -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
 			-c 'promtool test rules /etc/prometheus/tests/*.yml'; fi
 	@# Loki config loads; Alloy config parses (alloy fmt) and is formatted
-	docker run --rm -v "$(CURDIR)/monitoring/loki/config.yml:/etc/loki/config.yml:ro" $(LOKI_IMAGE) \
+	docker run --rm -v "$(CURDIR)/monitoring/loki:/etc/loki:ro" $(LOKI_IMAGE) \
 		-config.file=/etc/loki/config.yml -verify-config
-	docker run --rm -v "$(CURDIR)/monitoring/alloy/config.alloy:/c.alloy:ro" $(ALLOY_IMAGE) fmt /c.alloy | diff -u monitoring/alloy/config.alloy - \
+	docker run --rm -v "$(CURDIR)/monitoring/alloy:/alloy:ro" $(ALLOY_IMAGE) fmt /alloy/config.alloy | diff -u monitoring/alloy/config.alloy - \
 		|| { echo "config.alloy is not formatted/parsable: run alloy fmt"; exit 1; }
-	docker run --rm -v "$(CURDIR)/monitoring/tempo/config.yml:/etc/tempo/config.yml:ro" $(TEMPO_IMAGE) \
+	docker run --rm -v "$(CURDIR)/monitoring/tempo:/etc/tempo:ro" $(TEMPO_IMAGE) \
 		-config.file=/etc/tempo/config.yml -config.verify=true
 	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
 	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
@@ -93,7 +93,12 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		-c 'for u in "" https://hooks.invalid/T/B/x; do SLACK_WEBHOOK_URL=$$u sh /cfg/render.sh --check /tmp/am.yml && amtool check-config /tmp/am.yml || exit 1; done'
 
 dashboards: ## Regenerate the Grafana dashboard JSON (CI fails if the committed files differ)
-	uv run python monitoring/grafana/build_dashboards.py
+	python3 monitoring/grafana/build_dashboards.py
+
+HADOLINT_IMAGE ?= hadolint/hadolint:v2.12.0
+
+hadolint: ## Lint every Dockerfile (needs Docker)
+	@for f in $$(git ls-files '*Dockerfile*'); do echo "hadolint $$f"; docker run --rm -i $(HADOLINT_IMAGE) < $$f || exit 1; done
 
 down: ## Stop the Compose stack
 	docker compose down
@@ -108,4 +113,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs dashboards down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
