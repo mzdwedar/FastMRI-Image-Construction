@@ -59,7 +59,9 @@ def test_h5_keys_and_shapes(h5path):
             assert abs(recon.shape[1] - W) <= W, "reconstruction width suspiciously different"
 
 
-@pytest.mark.parametrize("h5path", list_files(cfg.DATA_DIR, limit=cfg.SAMPLE_LIMIT))
+@pytest.mark.parametrize(
+    "h5path", list_files(cfg.DATA_DIR, limit=cfg.SAMPLE_LIMIT) if Path(cfg.DATA_DIR).is_dir() else []
+)
 def test_no_empty_or_nearzero_slices(h5path):
     k, _, _ = cfg.open_k_and_recon(h5path)
     mag = cfg.compute_ifft_magnitude(k)
