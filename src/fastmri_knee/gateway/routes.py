@@ -95,7 +95,7 @@ async def infer(request: Request) -> Response:
     telemetry.SLICES.labels("/v1/infer").inc(len(volume))
     request.state.slices = len(volume)
     out = await run_inference(request, volume)
-    with telemetry.stage("encode"):
+    with telemetry.stage("encode"), telemetry.span("response.encode"):
         payload = await asyncio.to_thread(lambda: np.ascontiguousarray(out, dtype="<f4").tobytes())
     return Response(payload, media_type=OCTET_STREAM)
 
@@ -173,16 +173,20 @@ async def reconstructions(
     """
     settings = request.app.state.settings
     with temp_upload(settings.tmp_dir) as path:
-        await stream_file_part(request, path, settings.max_upload_mb << 20)
-        telemetry.UPLOAD_BYTES.observe(path.stat().st_size)
-        kspace = await asyncio.to_thread(read_kspace, path, settings.max_slices)
+        with telemetry.span("upload.read") as sp:
+            await stream_file_part(request, path, settings.max_upload_mb << 20)
+            size = path.stat().st_size
+            sp.set_attribute("upload.bytes", size)
+        telemetry.UPLOAD_BYTES.observe(size)
+        with telemetry.span("h5.validate"):
+            kspace = await asyncio.to_thread(read_kspace, path, settings.max_slices)
     telemetry.SLICES.labels("/v1/reconstructions").inc(len(kspace))
     request.state.slices = len(kspace)
-    with telemetry.stage("preprocess"):
+    with telemetry.stage("preprocess"), telemetry.span("preprocess", slices=len(kspace)):
         images, scale = await asyncio.to_thread(preprocess_volume, kspace, acceleration)
     recon = await run_inference(request, images)
     version = request.app.state.readiness.model_version or "unknown"
-    with telemetry.stage("encode"):
+    with telemetry.stage("encode"), telemetry.span("response.encode"):
         body = await asyncio.to_thread(
             encode_reconstruction, recon, scale, version, getattr(request.state, "request_id", None)
         )

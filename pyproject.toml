@@ -59,6 +59,10 @@ gateway = [
     "tritonclient[grpc,http]>=2.45.0",
     "grpcio>=1.60.0",
     "protobuf>=5.27.0",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
 ]
 
 [dependency-groups]

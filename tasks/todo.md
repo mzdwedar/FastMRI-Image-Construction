@@ -398,12 +398,20 @@ task that needs them is reached.
   - Verify: manual, trace viewed in Tempo or collector logs.
   - Deps: T1 · Files: `SPEC-observability.md`
 
-- [ ] **O8: Tracing: gateway OTel, Tempo, tail sampling, trace ids in logs** — M
+- [x] **O8: Tracing: gateway OTel, Tempo, tail sampling, trace ids in logs** — M
   - Do: OTel SDK + FastAPI instrumentation + manual spans; propagate to Triton (per O9); Tempo service; Alloy OTLP
     receiver + tail sampling (errors, > 2 s); `trace_id`/`span_id` in log lines; Grafana Tempo datasource with
     trace↔log links.
   - Acceptance: one request → trace with gateway spans (+ Triton spans if O9 succeeded); log line carries its trace_id.
   - Verify: `uv run pytest tests/unit/gateway/test_tracing.py` (in-memory exporter); manual Tempo check.
+  - **Done (2026-11-12):** OTel SDK + FastAPI instrumentation + the five spec spans (`upload.read`, `h5.validate`, `preprocess`,
+    `triton.infer` per chunk, `response.encode`); `traceparent` injected into Triton's gRPC metadata; Tempo 2.5.0 (3 d) and
+    Alloy OTLP receiver (gRPC 4317, HTTP 4318) with tail sampling (errors, > 2 s, `TRACE_SAMPLE_PERCENT`); `trace_id`/`span_id`
+    on every gateway log line; Grafana Tempo datasource with trace->logs and trace->metrics, Loki derived field log->trace.
+    Live on Docker Desktop with a random-init model: one reconstruction = one trace with gateway spans and Triton's
+    `InferRequest` > `unet_model` > `compute`; found by `request_id`; at 0 % a healthy trace is dropped and a 503 trace
+    (Triton stopped) is kept. Not exercised live: the > 2 s latency policy. Spec changed: no gateway head sampling (see
+    SPEC-observability, "O8 decision"). 12 unit tests in `test_tracing.py`.
   - Deps: O7, O9 · Files: `src/fastmri_knee/gateway/telemetry.py`, `docker-compose.yml`, `monitoring/tempo/config.yml`, `monitoring/alloy/config.alloy`, `tests/unit/gateway/test_tracing.py`
 
 - [ ] **O10: Dashboards as code** — M

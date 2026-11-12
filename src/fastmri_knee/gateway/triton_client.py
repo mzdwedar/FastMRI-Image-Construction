@@ -13,6 +13,9 @@ from typing import Any, Protocol, cast
 import numpy as np
 import numpy.typing as npt
 import structlog
+from opentelemetry import propagate
+
+from fastmri_knee.gateway import telemetry
 
 log = structlog.get_logger()
 
@@ -77,6 +80,12 @@ def _validate_output(out: F32, expected_shape: tuple[int, ...]) -> F32:
 
 
 async def _infer_chunk(client: TritonClient, chunk: F32, deadline: float) -> F32:
+    with telemetry.span("triton.infer", slices=len(chunk)) as sp:  # one span per chunk, retries included
+        out = await _infer_chunk_attempts(client, chunk, deadline, sp)
+    return out
+
+
+async def _infer_chunk_attempts(client: TritonClient, chunk: F32, deadline: float, sp: Any) -> F32:
     attempt = 0
     while True:
         remaining = deadline - time.monotonic()
@@ -95,6 +104,7 @@ async def _infer_chunk(client: TritonClient, chunk: F32, deadline: float) -> F32
             log.warning("triton_retry", attempt=attempt + 1, code=e.code)
             await asyncio.sleep(delay)
             attempt += 1
+            sp.set_attribute("triton.retries", attempt)
             continue
         return _validate_output(out, chunk.shape)
 
@@ -146,12 +156,16 @@ class GrpcTritonClient:
     async def infer(self, batch: F32, timeout_s: float) -> F32:
         inp = self._grpc.InferInput(INPUT_NAME, list(batch.shape), "FP32")
         inp.set_data_from_numpy(np.ascontiguousarray(batch, dtype=np.float32))
+        # W3C trace context rides in gRPC metadata (lowercase `traceparent`, O9); Triton parents its spans on it.
+        headers: dict[str, str] = {}
+        propagate.inject(headers)
         try:
             res = await self._client.infer(
                 self._model,
                 [inp],
                 outputs=[self._grpc.InferRequestedOutput(OUTPUT_NAME)],
                 client_timeout=timeout_s,
+                headers=headers,
             )
         except Exception as e:
             raise TritonError(self._code(e), "infer failed") from e

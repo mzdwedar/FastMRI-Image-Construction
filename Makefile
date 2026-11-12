@@ -67,6 +67,7 @@ PROM_IMAGE ?= prom/prometheus:v2.54.1
 AM_IMAGE ?= prom/alertmanager:v0.27.0
 LOKI_IMAGE ?= grafana/loki:3.1.1
 ALLOY_IMAGE ?= grafana/alloy:v1.3.1
+TEMPO_IMAGE ?= grafana/tempo:2.5.0
 
 check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and Alertmanager config (needs Docker)
 	docker compose config -q
@@ -83,6 +84,8 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		-config.file=/etc/loki/config.yml -verify-config
 	docker run --rm -v "$(CURDIR)/monitoring/alloy/config.alloy:/c.alloy:ro" $(ALLOY_IMAGE) fmt /c.alloy | diff -u monitoring/alloy/config.alloy - \
 		|| { echo "config.alloy is not formatted/parsable: run alloy fmt"; exit 1; }
+	docker run --rm -v "$(CURDIR)/monitoring/tempo/config.yml:/etc/tempo/config.yml:ro" $(TEMPO_IMAGE) \
+		-config.file=/etc/tempo/config.yml -config.verify=true
 	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
 	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
