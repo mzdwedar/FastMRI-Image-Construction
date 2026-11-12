@@ -49,5 +49,5 @@ what worked here.
 ## Troubleshooting
 
 - `not found on GitHub`: the commit is not pushed, or the repo is private (pip needs access to it).
-- pip fails on Python: the package supports Python >=3.10,<3.13; check `python --version` on the runtime.
+- pip fails on Python: Colab ships Python 3.13 but the package needs >=3.10,<3.13, so the notebook installs into a uv-managed 3.12 venv at `/content/venv` and trains with that interpreter.
 - No GPU: Runtime > Change runtime type. Training still runs on CPU but is far too slow beyond the smoke run.
