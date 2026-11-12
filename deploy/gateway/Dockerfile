@@ -19,7 +19,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
     PATH=/app/.venv/bin:$PATH \
-    GATEWAY_ENV=prod
+    GATEWAY_ENV=prod \
+    PROMETHEUS_MULTIPROC_DIR=/dev/shm/prometheus
 
 RUN useradd --no-create-home --uid 10001 --shell /usr/sbin/nologin gateway
 WORKDIR /app
