@@ -5,6 +5,8 @@ name: bench
 # baseline for the runner (benchmarks/baselines/ci.json) and fails only on a regression of more than 30 % at c=16.
 # Until ci.json exists it just reports the numbers.
 on:
+  pull_request:  # TEMPORARY: verify the workflow before merge; removed in the next commit
+    paths: [".github/workflows/bench.yml"]
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
