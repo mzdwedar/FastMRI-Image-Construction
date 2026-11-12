@@ -41,7 +41,7 @@ def test_promote_rollback_and_failed_promote(registry, triton_repo, triton_url):
     onnx = next(Path(artifact_root).rglob("model.onnx"))
     onnx.write_bytes(onnx.read_bytes()[:-16] + b"corrupted-bytes!")
 
-    with pytest.raises(PromoteError, match="production restored"):
+    with pytest.raises(PromoteError, match="production restored.*sha256"):
         run(promote, registry, triton_repo, triton_url, 3, force=True)
     assert production() == 1
     assert version_ready(triton_url, 1)

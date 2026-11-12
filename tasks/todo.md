@@ -205,12 +205,15 @@ task that needs them is reached.
     Live on arm64: no-force refused; v1 → v2 → rollback → v1 served; corrupt ONNX refused with v1 still serving.
   - Deps: P5 · Files: `src/fastmri_knee/packaging/promote.py`, `src/fastmri_knee/packaging/__main__.py`, `Makefile`, `tests/unit/packaging/test_promote.py`
 
-- [ ] **P7: Packaging integration tests against Triton** — M
+- [x] **P7: Packaging integration tests against Triton** — M
   - Do: session fixture runs Triton (`docker run`, empty repo, explicit mode) + temp MLflow; tests: promote v1 → v2
     → rollback; corrupt ONNX → v2 keeps serving.
   - Acceptance: tests pass locally (or in CI if arm64 fallback applies).
   - Verify: `make test-integration`.
   - Deps: P6 · Files: `tests/integration/conftest.py`, `tests/integration/test_packaging_triton.py`
+  - Done: one test, ~11 s on arm64 with real Triton 24.08 (random host port, empty tmp repo, explicit mode) and a file-store
+    registry of 3 random-init versions: promote v1 → v2 (v1 unready) → rollback (v1 ready) → v3 with corrupted ONNX refused on
+    sha256, production stays v1 and serving. Skips if Docker or the image is absent (`TRITON_IMAGE` overrides).
 
 ### ✅ Checkpoint: Packaging — `make up model-random && make promote VERSION=1 ALIAS=production FORCE=1` → Triton serves v1; P7 green
 
