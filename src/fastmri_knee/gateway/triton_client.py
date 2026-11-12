@@ -7,12 +7,15 @@ tests use a fake. Retry/chunk/validate logic lives in `infer_volume` so it is ex
 import asyncio
 import random
 import time
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
+import numpy.typing as npt
 import structlog
 
 log = structlog.get_logger()
+
+F32 = npt.NDArray[np.float32]
 
 INPUT_NAME = "input"
 OUTPUT_NAME = "output"
@@ -41,14 +44,14 @@ class TritonClient(Protocol):
         """Max slices per Triton request (>= 1). Raises `TritonError` if Triton cannot be reached."""
         ...
 
-    async def infer(self, batch: np.ndarray, timeout_s: float) -> np.ndarray:
+    async def infer(self, batch: F32, timeout_s: float) -> F32:
         """One Triton request. Raises `TritonError` on a gRPC failure."""
         ...
 
     async def close(self) -> None: ...
 
 
-def _validate_output(out: np.ndarray, expected_shape: tuple[int, ...]) -> np.ndarray:
+def _validate_output(out: F32, expected_shape: tuple[int, ...]) -> F32:
     if out.shape != expected_shape:
         raise InvalidOutputError(f"unexpected output shape {out.shape}, wanted {expected_shape}")
     if not np.isfinite(out).all():
@@ -56,7 +59,7 @@ def _validate_output(out: np.ndarray, expected_shape: tuple[int, ...]) -> np.nda
     return out
 
 
-async def _infer_chunk(client: TritonClient, chunk: np.ndarray, deadline: float) -> np.ndarray:
+async def _infer_chunk(client: TritonClient, chunk: F32, deadline: float) -> F32:
     attempt = 0
     while True:
         remaining = deadline - time.monotonic()
@@ -79,7 +82,7 @@ async def _infer_chunk(client: TritonClient, chunk: np.ndarray, deadline: float)
         return _validate_output(out, chunk.shape)
 
 
-async def infer_volume(client: TritonClient, volume: np.ndarray, timeout_s: float) -> np.ndarray:
+async def infer_volume(client: TritonClient, volume: F32, timeout_s: float) -> F32:
     """Run an (N, 1, H, W) float32 volume through Triton in chunks of <= max_batch_size, sent concurrently.
 
     `timeout_s` is the overall deadline for the whole call, retries included.
@@ -123,7 +126,7 @@ class GrpcTritonClient:
             self._max_batch = max(1, cfg.config.max_batch_size)  # 0 = batching disabled -> 1 slice per call
         return self._max_batch
 
-    async def infer(self, batch: np.ndarray, timeout_s: float) -> np.ndarray:
+    async def infer(self, batch: F32, timeout_s: float) -> F32:
         inp = self._grpc.InferInput(INPUT_NAME, list(batch.shape), "FP32")
         inp.set_data_from_numpy(np.ascontiguousarray(batch, dtype=np.float32))
         try:
@@ -138,7 +141,7 @@ class GrpcTritonClient:
         out = res.as_numpy(OUTPUT_NAME)
         if out is None:
             raise InvalidOutputError("response has no output tensor")
-        return out
+        return cast(F32, out)
 
     async def close(self) -> None:
         await self._client.close()

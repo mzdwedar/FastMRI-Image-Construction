@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request, Response
 
 from fastmri_knee.gateway.errors import ProblemError
 from fastmri_knee.gateway.triton_client import (
+    F32,
     InvalidOutputError,
     TritonClient,
     TritonError,
@@ -23,7 +24,7 @@ SLICE_BYTES = int(np.prod(SLICE_SHAPE)) * 4
 OCTET_STREAM = "application/octet-stream"
 
 
-async def run_inference(request: Request, volume: np.ndarray) -> np.ndarray:
+async def run_inference(request: Request, volume: F32) -> F32:
     """Call Triton and translate failures into API errors. Internals are logged, never returned."""
     client: TritonClient = request.app.state.triton
     try:
