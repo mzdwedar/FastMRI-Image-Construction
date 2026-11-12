@@ -211,7 +211,7 @@ Key files:
 │  ├─ prometheus/              # prometheus.yml (scrape jobs, Alertmanager), rules/
 │  ├─ alertmanager/            # alertmanager.yml + render.sh (adds Slack when SLACK_WEBHOOK_URL is set)
 │  ├─ alert-sink/              # local webhook receiver that logs every alert
-│  ├─ loki/ alloy/             # log storage and the Docker-log collector
+│  ├─ loki/ tempo/ alloy/      # log and trace storage; Alloy collects logs and OTLP traces
 │  └─ grafana/                 # Provisioning + dashboards
 ├─ mlruns/                     # MLflow local tracking
 └─ data/                       # train/val/test splits
@@ -316,6 +316,7 @@ Notes:
 - `make check-configs` validates the Compose file, Prometheus config, rules and rule tests, and both Alertmanager variants (needs Docker).
 - cAdvisor identifies containers by cgroup `id`, not name, under Docker Desktop's containerd image store.
 - Logs: Alloy ships every container's stdout to Loki (:3100), labelled `service` and `level` only. In Grafana Explore: `{service="gateway"} | json | request_id="<id>"` (the id is the `X-Request-ID` response header).
+- Traces: the gateway and Triton export OTLP to Alloy, which keeps all errors, all requests over 2 s and `TRACE_SAMPLE_PERCENT` (default 10; set 100 in `.env` for development) of the rest, then forwards to Tempo (:3200). Every gateway log line carries `trace_id`; in Grafana, open a log line's *Open trace* link, or search Tempo by `request_id`.
 - Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
 ### Pitfalls

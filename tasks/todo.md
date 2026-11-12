@@ -374,8 +374,8 @@ task that needs them is reached.
   - Deps: O1, O3 · Files: `monitoring/prometheus/rules/{service,infra}.yml`, `monitoring/prometheus/tests/{service,infra}_test.yml`
 
 - [ ] **O5: SLO recording rules and burn-rate alerts** — M
-  - Do: SLI recording rules (5m/30m/1h/6h) for the three SLOs; fast/slow burn alerts; promtool tests with
-    synthetic series.
+  - Do: SLI recording rules (5m/30m/1h/6h) for the two latency SLOs (Q12: no availability SLO; `/v1/infer` < 500 ms
+    @ 99 %, `/v1/reconstructions` < 5 s @ 95 %); fast/slow burn alerts; promtool tests with synthetic series.
   - Acceptance: burn-rate math verified by tests at 14.4× and 6×.
   - Verify: `make check-configs`.
   - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
@@ -404,30 +404,62 @@ task that needs them is reached.
   - Verify: manual, trace viewed in Tempo or collector logs.
   - Deps: T1 · Files: `SPEC-observability.md`
 
-- [ ] **O8: Tracing: gateway OTel, Tempo, tail sampling, trace ids in logs** — M
+- [x] **O8: Tracing: gateway OTel, Tempo, tail sampling, trace ids in logs** — M
   - Do: OTel SDK + FastAPI instrumentation + manual spans; propagate to Triton (per O9); Tempo service; Alloy OTLP
     receiver + tail sampling (errors, > 2 s); `trace_id`/`span_id` in log lines; Grafana Tempo datasource with
     trace↔log links.
   - Acceptance: one request → trace with gateway spans (+ Triton spans if O9 succeeded); log line carries its trace_id.
   - Verify: `uv run pytest tests/unit/gateway/test_tracing.py` (in-memory exporter); manual Tempo check.
+  - **Done (2026-11-12):** OTel SDK + FastAPI instrumentation + the five spec spans (`upload.read`, `h5.validate`, `preprocess`,
+    `triton.infer` per chunk, `response.encode`); `traceparent` injected into Triton's gRPC metadata; Tempo 2.5.0 (3 d) and
+    Alloy OTLP receiver (gRPC 4317, HTTP 4318) with tail sampling (errors, > 2 s, `TRACE_SAMPLE_PERCENT`); `trace_id`/`span_id`
+    on every gateway log line; Grafana Tempo datasource with trace->logs and trace->metrics, Loki derived field log->trace.
+    Live on Docker Desktop with a random-init model: one reconstruction = one trace with gateway spans and Triton's
+    `InferRequest` > `unet_model` > `compute`; found by `request_id`; at 0 % a healthy trace is dropped and a 503 trace
+    (Triton stopped) is kept. Not exercised live: the > 2 s latency policy. Spec changed: no gateway head sampling (see
+    SPEC-observability, "O8 decision"). 12 unit tests in `test_tracing.py`.
   - Deps: O7, O9 · Files: `src/fastmri_knee/gateway/telemetry.py`, `docker-compose.yml`, `monitoring/tempo/config.yml`, `monitoring/alloy/config.alloy`, `tests/unit/gateway/test_tracing.py`
 
-- [ ] **O10: Dashboards as code** — M
+- [x] **O10: Dashboards as code** — M
   - Do: refactor `build_dashboards.py`; Service overview, Triton, Infrastructure dashboards with spec panels and
     cross-links; `make dashboards`; remove old dashboards.
   - Acceptance: dashboards load with live data; regenerated JSON identical to committed.
   - Verify: `make dashboards && git diff --exit-code`; open Grafana.
+  - **Done (2026-11-12):** `service-overview.json` (14 panels), `triton.json` (8), `infrastructure.json` (8); old
+    `fastapi-dashboard.json`/`triton-dashboard.json` removed (the generator deletes JSON it no longer owns). Every
+    dashboard links to the other two; request-rate panel links to Loki by route, stage-time panel to Tempo slow
+    traces. 36 panel queries run against live Prometheus with no errors; the dashboards load in Grafana (API).
+    Availability/error-budget stats are inline 30 d queries at the 99.5 % target until O5's recording rules exist.
+    Grafana home is now the service overview. Not done: the `git diff --exit-code` check in CI (C5), clicking the
+    links in the UI. Model dashboard stays with M5.
   - Deps: O1, O3 · Files: `monitoring/grafana/build_dashboards.py`, `monitoring/grafana/dashboards/*.json`, `monitoring/grafana/provisioning/dashboards/dashboards.yml`, `Makefile`
 
-- [ ] **O11: Observability e2e tests** — M
+- [x] **O11: Observability e2e tests** — M
   - Do: e2e: 10 requests → counter ≥ 10; Loki has the log for a known request_id; Tempo has its trace; stop Triton →
     `TritonDown` at alert-sink ≤ 2 min, `/readyz` 503 ≤ 10 s; every dashboard query returns no error.
   - Acceptance/Verify: `make test-e2e` green locally and in CI.
+  - **Done (2026-11-12):** five tests, `make test-e2e` green twice in a row against the local stack (about 2 min):
+    10 requests raise `gateway_requests_total` by at least 10; Loki returns the log line for a known `request_id`
+    (and no filename); Tempo returns the trace by id (gateway spans and Triton `InferRequest`/`compute`) and by
+    `request_id`; all 36 dashboard queries succeed and Grafana lists the three provisioned dashboards; stopping Triton
+    turns `/readyz` 503 within 10 s and `TritonDown` reaches `alert-sink` (compose exec, port not published), then
+    Triton is restarted. Needs `E2E_API_KEY` and a running `make up-dev` stack with a promoted model; `make test-e2e`
+    sets Alloy to `TRACE_SAMPLE_PERCENT=100`. Findings: `/readyz` is per gunicorn worker, so after a restart one worker
+    can say 200 while another still answers 503; the tests wait for 8 inferences in a row instead. A stale Grafana
+    bind mount after a branch switch left no dashboards loaded; the test caught it (recreate grafana).
+    **Not done:** "in CI". There is no e2e job yet, that is C4 (it must start the stack, mint a key and promote a
+    model, then run these).
   - Deps: O4, O8, O10 · Files: `tests/e2e/test_observability.py`, `tests/e2e/conftest.py`
 
-- [ ] **C5: Configs job in CI** — S
+- [x] **C5: Configs job in CI** — S
   - Do: `configs` job: `make check-configs`, dashboards diff, hadolint, actionlint; make it required.
   - Acceptance/Verify: green; drill with a broken alert rule fails it.
+  - **Done (2026-11-12):** `configs` job in `ci.yml` (about 30 s): `make check-configs`, new `make hadolint`, and
+    `make dashboards` + `git diff --exit-code`. actionlint already had its own job. Drills on throwaway PRs #47-#49: a
+    broken alert rule, a stale dashboard and an unpinned `apt-get install` each failed only `configs`. `check-configs`
+    now mounts directories instead of single files (Docker Desktop served stale single-file mounts). `make dashboards`
+    uses plain `python3` (stdlib only), so the job needs no uv. **Not done:** marking `configs` a required check is a
+    GitHub branch-protection setting; I did not change it.
   - Deps: O3, C1 · Files: `.github/workflows/ci.yml`
 
 ### ✅ Checkpoint: Observability — SPEC.md criteria 3, 4 pass in e2e; all alerts have tests + runbooks; human review
@@ -644,10 +676,12 @@ so the decision isn't lost.
   - Recommendation: `alert-sink` default, Slack enabled only when `SLACK_WEBHOOK_URL` is set.
   - Trigger: O3 · Blocks: O3 · Spec: SPEC-observability OQ1
 
-- [ ] **Q12: Calibrate SLO targets**
+- [x] **Q12: Calibrate SLO targets**
   - Context: initial targets (99.5% availability, `/v1/infer` < 250 ms @ 99%, `/v1/reconstructions` < 5 s @ 95%)
     are guesses until the gateway baseline exists. Changing SLOs requires approval.
   - Recommendation: set from G7/C4 measured p95/p99 with ~2× headroom.
+  - **Decided (2026-11-12, owner):** latency SLOs only. `/v1/infer` < 500 ms @ 99 %, `/v1/reconstructions` < 5 s @ 95 %,
+    30 d. Basis: local p99 248 ms for infer; 2.3-2.9 s for a 35-slice volume. Re-check on real hardware.
   - Trigger: O5 · Blocks: O5 · Spec: SPEC-observability §SLOs
 
 - [ ] **Q13: Data-consistency error as the quality proxy with fully sampled input**

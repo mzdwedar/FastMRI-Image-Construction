@@ -24,6 +24,7 @@ services:
       GATEWAY_WORKERS: "${GATEWAY_WORKERS:-2}"
       GATEWAY_MAX_INFLIGHT: "${GATEWAY_MAX_INFLIGHT:-32}"
       GATEWAY_TMP_DIR: /tmp
+      GATEWAY_OTLP_ENDPOINT: http://alloy:4317
     secrets:
       - source: api_keys
         target: api_keys   # -> /run/secrets/api_keys; create it with `make api-key`
@@ -35,6 +36,7 @@ services:
     cap_drop: [ALL]
     depends_on:
       - triton
+      - alloy
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -60,10 +62,19 @@ services:
       - --metrics-config=summary_latencies=true   # p50/p90/p99 summaries on /metrics
       - --allow-metrics=true
       - --log-verbose=0
+      # Spans (InferRequest > model > compute) go to Alloy over OTLP/HTTP, parented on the gateway's traceparent (O9).
+      # rate=1: Triton ignores the sampled flag, so Alloy's tail sampling decides what is kept.
+      - --trace-config=mode=opentelemetry
+      - --trace-config=opentelemetry,url=alloy:4318/v1/traces
+      - --trace-config=rate=1
+      - --trace-config=level=TIMESTAMPS
+      - --trace-config=count=-1
     cpus: "${TRITON_CPUS:-4}"
     mem_limit: "${TRITON_MEM:-4g}"
     shm_size: 1gb
     restart: unless-stopped
+    depends_on:
+      - alloy
     volumes:
       - ./deploy/model_repository:/models:ro   # written only by `make sync`
     expose:
@@ -182,6 +193,16 @@ services:
     ports:
       - "3100:3100"
 
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo/config.yml"]
+    volumes:
+      - ./monitoring/tempo/config.yml:/etc/tempo/config.yml:ro
+      - tempo_data:/var/tempo
+    mem_limit: 384m
+    ports:
+      - "3200:3200"
+
   alloy:
     image: grafana/alloy:v1.3.1
     command:
@@ -195,9 +216,12 @@ services:
       # so Alloy publishes no ports beyond its own UI and runs no user-supplied config.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
+    environment:
+      TRACE_SAMPLE_PERCENT: "${TRACE_SAMPLE_PERCENT:-10}"   # share of ordinary traces kept; errors and > 2 s always are
     mem_limit: 256m
     depends_on:
       - loki
+      - tempo
 
   grafana:
     image: grafana/grafana:11.1.4
@@ -205,7 +229,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-change-me}"
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/triton-dashboard.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/service-overview.json
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -215,6 +239,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
 
 secrets:
   api_keys:
@@ -226,4 +251,5 @@ volumes:
   alertmanager_data:
   grafana_data:
   loki_data:
+  tempo_data:
   alloy_data:

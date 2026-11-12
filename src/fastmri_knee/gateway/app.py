@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Response
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -38,6 +40,7 @@ class RequestIdMiddleware:
         supplied = MutableHeaders(scope=scope).get("x-request-id")
         rid = supplied if supplied and _VALID_REQUEST_ID.fullmatch(supplied) else uuid.uuid4().hex
         scope.setdefault("state", {})["request_id"] = rid
+        trace.get_current_span().set_attribute("request_id", rid)  # the server span (instrumentation is outermost)
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=rid)
         started = False
@@ -63,7 +66,12 @@ class RequestIdMiddleware:
             await response(scope, receive, send_with_id)
 
 
-def create_app(settings: Settings | None = None, triton: TritonClient | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    triton: TritonClient | None = None,
+    tracer_provider: TracerProvider | None = None,
+) -> FastAPI:
+    """`tracer_provider` is for tests; in service `GATEWAY_OTLP_ENDPOINT` builds the exporting provider."""
     settings = settings or Settings()  # invalid settings raise here, at startup
     configure_logging(settings.log_level)
 
@@ -89,6 +97,11 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     app.add_middleware(AccessLogMiddleware)  # inside RequestIdMiddleware: request_id is bound, 500s are visible
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
+    provider = tracer_provider or (telemetry.otlp_provider(settings.otlp_endpoint) if settings.otlp_endpoint else None)
+    if provider:
+        telemetry.setup_tracing(app, provider)
+    else:
+        telemetry.disable_tracing()
     app.include_router(router)
     app.include_router(probes)
 

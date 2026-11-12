@@ -77,3 +77,18 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
+
+  configs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Compose, Prometheus rules and rule tests, Alertmanager, Loki, Alloy, Tempo
+        run: make check-configs
+      - name: Dockerfiles
+        run: make hadolint
+      - name: Committed dashboards match the generator
+        run: |
+          make dashboards
+          git diff --exit-code -- monitoring/grafana/dashboards
+          test -z "$(git ls-files --others --exclude-standard monitoring/grafana/dashboards)"

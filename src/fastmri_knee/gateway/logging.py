@@ -3,6 +3,8 @@
 import logging
 import sys
 import time
+from collections.abc import MutableMapping
+from typing import Any
 
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -25,12 +27,22 @@ def _trace_ids() -> tuple[str | None, str | None]:
     return format(ctx.trace_id, "032x"), format(ctx.span_id, "016x")
 
 
+def _add_trace_ids(_: Any, __: str, event: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+    """Put the active span's ids on every log line (the access log sets them itself, so setdefault)."""
+    trace_id, span_id = _trace_ids()
+    if trace_id:
+        event.setdefault("trace_id", trace_id)
+        event.setdefault("span_id", span_id)
+    return event
+
+
 def configure_logging(level: str = "INFO") -> None:
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level, force=True)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
+            _add_trace_ids,
             structlog.processors.TimeStamper(fmt="iso", utc=True, key="ts"),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
