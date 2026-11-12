@@ -522,14 +522,16 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: manual — you run it on Colab and share the summary.
   - Deps: K1, Q17, Q18, S4 (commit must be pushed), S11 · Files: `notebooks/train_colab.ipynb`, `docs/training-colab.md`
 
-- [ ] **K3: Register a Colab run locally** — S
+- [x] **K3: Register a Colab run locally** — S
+  - Done 2026-11-12: refusals and summary-to-card fields were already in `registry.py` and covered by `test_register.py` (P2); added `make register CKPT=… [SUMMARY=…]`.
   - Do: `register --checkpoint … --summary …` (`make register CKPT=… SUMMARY=…`); refuse on checkpoint hash or
     `preprocess_version` mismatch; card `source=colab` with the summary's metrics so the PSNR promote gate works.
   - Acceptance: unit tests for both refusals and for card fields from a summary.
   - Verify: `uv run pytest tests/unit/packaging/test_register.py`.
   - Deps: P2, K1 · Files: `src/fastmri_knee/packaging/registry.py`, `Makefile`, `tests/unit/packaging/test_register.py`
 
-- [ ] **K4: Notebook hygiene in CI** — XS
+- [x] **K4: Notebook hygiene in CI** — XS
+  - Done 2026-11-12: `nbstripout` pre-commit hook; ruff now lints notebooks; `scripts/check_notebook_outputs.py` runs in `make lint` (so CI lint fails on committed outputs). `eda.ipynb` outputs stripped. The pre-commit hook itself is not exercised locally (needs `pre-commit install`).
   - Do: `nbstripout` in pre-commit; ruff lints the notebook; CI fails if outputs are committed.
   - Acceptance/Verify: committing a notebook with outputs fails pre-commit and CI.
   - Deps: K2, C1 · Files: `.pre-commit-config.yaml`

@@ -68,6 +68,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.5.0",
+    "nbstripout>=0.8.1",
     "mypy>=1.10",
     "pre-commit>=3.7",
     "ipython>=8.0.0",
@@ -91,7 +92,6 @@ override-dependencies = ["perf-analyzer; sys_platform == 'never'"]
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["notebooks"]
 target-version = "py310"  # lowest supported; raise with requires-python
 
 [tool.ruff.lint]

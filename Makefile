@@ -8,7 +8,7 @@ setup: ## Create .venv from uv.lock (frozen)
 	uv sync --frozen --extra train --extra export --extra gateway
 
 lint: ## ruff check + format check
-	uv run ruff check . && uv run ruff format --check .
+	uv run ruff check . && uv run ruff format --check . && uv run python scripts/check_notebook_outputs.py
 
 format: ## Auto-format and fix lint
 	uv run ruff check --fix . && uv run ruff format .
@@ -31,6 +31,11 @@ MLFLOW_TRACKING_URI ?= http://localhost:5001
 
 model-random: ## Register an untrained model (random_init=true) in MLflow; no dataset needed
 	uv run python -m fastmri_knee.packaging register --random-init --tracking-uri $(MLFLOW_TRACKING_URI)
+
+register: ## Register a trained checkpoint: make register CKPT=best.ckpt [SUMMARY=run_summary.json]
+	@test -n "$(CKPT)" || { echo "usage: make register CKPT=<best.ckpt> [SUMMARY=<run_summary.json>]"; exit 2; }
+	uv run python -m fastmri_knee.packaging register --checkpoint $(CKPT) \
+		$(if $(SUMMARY),--summary $(SUMMARY)) --tracking-uri $(MLFLOW_TRACKING_URI)
 
 sync: ## Load the production model into Triton (needs `make up-dev`)
 	uv run python -m fastmri_knee.packaging sync --tracking-uri $(MLFLOW_TRACKING_URI)
@@ -66,4 +71,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random sync promote rollback up up-dev down data train clean
+.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev down data train clean
