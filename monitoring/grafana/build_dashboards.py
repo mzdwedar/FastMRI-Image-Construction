@@ -307,7 +307,7 @@ def per_req(metric):
 
 triton = dashboard(
     "fastmri-triton",
-    "Triton",
+    "Triton drill",
     [
         timeseries(
             "Inference rate (successful requests/s)",
