@@ -21,6 +21,7 @@ reconstruction.
 | Request path | FastAPI = public gateway (validation, preprocessing, auth) → Triton over gRPC. Triton is the only inference engine; the PyTorch path in FastAPI is removed |
 | Hardware | CPU for development and CI; GPU variant available via a Compose override, not exercised in CI |
 | Model registry | MLflow (Compose service), aliases drive promotion |
+| Training | Google Colab (GPU). The repo is installed from git at a pinned commit; data and outputs live on Google Drive; the checkpoint + `run_summary.json` are registered locally (Colab can't reach the local MLflow) |
 | Observability stack | Prometheus, Alertmanager, Grafana, Loki, Tempo, Grafana Alloy (log shipping + OTLP), node-exporter, cAdvisor |
 | CI | GitHub Actions; images published to GHCR |
 | Baseline | Commit `d9abbd6` on branch `refactor/prod-infra` |

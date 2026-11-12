@@ -11,18 +11,19 @@ task that needs them is reached.
 ## Phase 1 — Foundation (SPEC-foundation)
 
 - [ ] **F1: Python 3.12 compatibility spike** — S
-  - Do: In a throwaway env, install the train deps on 3.12 (smp 0.3.3, then 0.3.4+ if needed); load an existing
-    checkpoint from `mlruns/` and run one forward pass; run the serving tests.
+  - Do: In a throwaway env, install the train deps on 3.12 (smp 0.3.3, then 0.3.4+ if needed); save a
+    random-init checkpoint under 3.10 and load it under 3.12, one forward pass each; run the serving tests; note
+    Colab's current Python version (Q2).
   - Acceptance: decision (3.12 / 3.11 / stay) with evidence recorded in SPEC-foundation open question 2.
-  - Verify: forward-pass output from the existing checkpoint matches the 3.10 output (`atol=1e-5`).
-  - Deps: S1, S3 · Files: `SPEC-foundation.md`
+  - Verify: forward-pass output from the 3.10-saved checkpoint matches the 3.10 output (`atol=1e-5`).
+  - Deps: S1 · Files: `SPEC-foundation.md`
 
 - [ ] **F2: Verify FFT shift on a real slice** — S
-  - Do: For one file in `data/val`, plot input from current `FastMRITransform` vs shifted variant vs
+  - Do: For one real `.h5` file (local `data/` is empty: get one from Drive per S11, or run this check in Colab), plot input from current `FastMRITransform` vs shifted variant vs
     `reconstruction_rss`; compute normalized cross-correlation of each with the target.
   - Acceptance: figure `docs/img/fftshift-check.png` + NCC numbers recorded in SPEC-foundation; decision request to user.
   - Verify: manual inspection of the figure.
-  - Deps: none · Files: `docs/img/fftshift-check.png`, `SPEC-foundation.md`
+  - Deps: S11 · Files: `docs/img/fftshift-check.png`, `SPEC-foundation.md`
 
 - [ ] **F3: Repo cleanup and test discovery** — S
   - Do: delete `build/ preds/ results/ triton_models/ lightning_logs/ unet_model.onnx src/*.egg-info split_data.py`;
@@ -193,7 +194,7 @@ task that needs them is reached.
 - [ ] **T5: GPU Compose override** — S
   - Do: `docker-compose.gpu.yml` (nvidia device reservation, `TRITON_PROFILE=gpu`); README manual check section.
   - Acceptance/Verify: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` validates.
-  - Deps: T1 (manual GPU check: S8) · Files: `docker-compose.gpu.yml`, `README.md`
+  - Deps: T1 (manual GPU check: S8, deferred) · Files: `docker-compose.gpu.yml`, `README.md`
 
 - [ ] **C3: Integration job in CI** — S
   - Do: `e2e.yml` with `integration` job (Docker available, image cache).
@@ -439,9 +440,45 @@ task that needs them is reached.
 
 ---
 
+## Training track — Google Colab (SPEC-foundation req 10, SPEC-model-packaging req 2)
+
+Runs alongside the infra phases; K1 after F5/F7, K3 after P2. I can't execute Colab, so Colab runs are verified by
+you (manual check) and everything testable is covered locally on synthetic data.
+
+- [ ] **K1: Colab-ready training entrypoint and `run_summary.json`** — M
+  - Do: `accelerator: auto`; data/checkpoint/output paths overridable (Drive); resume from `last.ckpt` in the
+    checkpoint dir (Colab disconnects); write `run_summary.json` next to the best checkpoint (git sha,
+    `preprocess_version`, hparams, val metrics, checkpoint sha256, torch/CUDA versions, GPU name).
+  - Acceptance: 2-step CPU run on synthetic `.h5` writes a valid summary; rerun with same dir resumes, not restarts.
+  - Verify: `uv run pytest tests/unit/test_train_summary.py`.
+  - Deps: F5, F7, Q2 · Files: `src/fastmri_knee/train.py`, `configs/trainer.yaml`, `configs/datamodule.yaml`, `tests/unit/test_train_summary.py`
+
+- [ ] **K2: Colab training notebook** — S
+  - Do: `notebooks/train_colab.ipynb`: parameter cell (git sha, Drive paths, epochs, batch size), GPU check, mount
+    Drive, `pip install "fastmri-knee[train] @ git+https://github.com/mzdwedar/fastmri@<sha>"`, copy data from Drive
+    to `/content` (Drive FUSE is slow for h5 random reads), run `python -m fastmri_knee.train …`, outputs to Drive;
+    `docs/training-colab.md` with the steps. Outputs stripped before commit.
+  - Acceptance: smoke run (1 epoch, small `num_samples`) on a Colab GPU writes `best.ckpt` + `run_summary.json` to Drive.
+  - Verify: manual — you run it on Colab and share the summary.
+  - Deps: K1, Q17, Q18, S11 · Files: `notebooks/train_colab.ipynb`, `docs/training-colab.md`
+
+- [ ] **K3: Register a Colab run locally** — S
+  - Do: `register --checkpoint … --summary …` (`make register CKPT=… SUMMARY=…`); refuse on checkpoint hash or
+    `preprocess_version` mismatch; card `source=colab` with the summary's metrics so the PSNR promote gate works.
+  - Acceptance: unit tests for both refusals and for card fields from a summary.
+  - Verify: `uv run pytest tests/unit/packaging/test_register.py`.
+  - Deps: P2, K1 · Files: `src/fastmri_knee/packaging/registry.py`, `Makefile`, `tests/unit/packaging/test_register.py`
+
+- [ ] **K4: Notebook hygiene in CI** — XS
+  - Do: `nbstripout` in pre-commit; ruff lints the notebook; CI fails if outputs are committed.
+  - Acceptance/Verify: committing a notebook with outputs fails pre-commit and CI.
+  - Deps: K2, C1 · Files: `.pre-commit-config.yaml`
+
+---
+
 ## Gated (outside infra scope)
 
-- [ ] **R1: Retrain on preprocessing v2** — user, GPU · Deps: F8, Q1, S8 · then `make register RUN_ID=… && make promote VERSION=n ALIAS=production`
+- [ ] **R1: Retrain on preprocessing v2 (Colab)** — you, via K2 · Deps: F8, Q1, K2, K3, S11 · download `best.ckpt` + `run_summary.json` from Drive, then `make register CKPT=… SUMMARY=… && make promote VERSION=n ALIAS=production`
 
 ---
 
@@ -462,6 +499,7 @@ so the decision isn't lost.
 
 - [ ] **Q2: Python version**
   - Context: 3.10 reached end of life in Oct 2026. Risk: `segmentation-models-pytorch==0.3.3` / `timm==0.9.2` on 3.12.
+    Hard constraint: `requires-python` must include Colab's runtime Python, or the package won't install there.
   - Options: 3.12 · 3.11 · stay on 3.10.
   - Recommendation: 3.12 if F1 passes, else 3.11. Evidence: F1 results.
   - Trigger: after F1 · Blocks: F6 · Spec: SPEC-foundation OQ2
@@ -534,6 +572,21 @@ so the decision isn't lost.
 - [ ] **Q16: Async job API for large volumes?** — *deferred*
   - Recommendation: only if `/v1/reconstructions` p95 > 10 s. Spec: SPEC-gateway OQ1
 
+- [ ] **Q17: Experiment tracking from Colab**
+  - Context: Colab can't reach the local Compose MLflow.
+  - Options: (a) MLflow file store on Drive for curves + register locally from `best.ckpt` + `run_summary.json`;
+    (b) tunnel to local MLflow (ngrok/cloudflared; exposes a local service, needs auth); (c) hosted MLflow
+    (DagsHub, Databricks).
+  - Recommendation: (a): no exposed services, and registration stays a local, gated step.
+  - Trigger: K2 · Blocks: K2
+
+- [ ] **Q18: Dataset on Drive**
+  - Context: local `data/` is empty. Full single-coil knee train set is ~88 GB; Colab local disk is ~100 GB and
+    sessions are time-limited.
+  - Options: full set · fixed subset (e.g. N train volumes + full val) recorded in a manifest with file hashes.
+  - Recommendation: a committed subset manifest (`configs/data/subset.yaml`), copied to `/content` at session start.
+  - Trigger: K2 · Blocks: K2, S11
+
 ### Setup (S) — steps that need you, an account, or a machine
 
 - [ ] **S1: Rebuild the local environment**
@@ -547,10 +600,9 @@ so the decision isn't lost.
   - Do: raise Docker Desktop memory to ≥ 12 GB, or accept an observability Compose profile that is off by default.
   - Trigger: T1 (tight), O3 (required)
 
-- [ ] **S3: A trained checkpoint for compatibility checks**
-  - Context: no `.ckpt` exists under `mlruns/` or `mlflow_artifacts/`; F1 can't test loading an old checkpoint.
-  - Do: provide one (path or MLflow run), or accept F1 testing with a freshly trained 1-epoch checkpoint on `data/`.
-  - Trigger: F1
+- [x] **S3: A trained checkpoint for compatibility checks**
+  - → Decided 2026-11-12: none needed up front. F1 saves a random-init checkpoint under 3.10 and loads it under the
+    new Python; real checkpoints come from Colab (K2).
 
 - [ ] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
   - Do: confirm Actions enabled; `git push -u origin refactor/prod-infra` (I'll ask before pushing).
@@ -570,9 +622,10 @@ so the decision isn't lost.
   - Recommendation: Dependabot.
   - Trigger: C2
 
-- [ ] **S8: GPU machine (manual checks only)**
-  - Do: access to an NVIDIA GPU host with Docker + NVIDIA Container Toolkit for the T5 manual check and R1 retrain.
-  - Trigger: T5 (manual check can be deferred), R1
+- [ ] **S8: GPU Docker host for the Triton GPU check** — *deferred*
+  - Context: training moved to Colab (S11). Colab can't run Docker, so the T5 manual GPU check of Triton needs a
+    separate NVIDIA host with Docker + NVIDIA Container Toolkit (e.g. a short-lived cloud GPU VM).
+  - Trigger: T5 manual check only; T5's config validation doesn't need it.
 
 - [ ] **S9: GHCR publishing permissions**
   - Do: allow workflows to write packages (repo Settings → Actions → Workflow permissions), set package visibility per Q14.
@@ -581,3 +634,9 @@ so the decision isn't lost.
 - [ ] **S10: Branch protection on `main`**
   - Do: require PRs, linear history, and the required checks listed in SPEC-ci-cd (GitHub Settings → Branches).
   - Trigger: C8
+
+- [ ] **S11: Colab and Google Drive**
+  - Do: pick a Colab tier (free T4 has session limits; Pro gives longer sessions/A100); make sure Drive has space for
+    the dataset subset (Q18) and checkpoints; upload data to `MyDrive/fastmri/{train,val,test}`; download one real
+    val `.h5` into local `data/val/` for F2 and realistic local tests.
+  - Trigger: F2 (one file), K2 (full setup)

@@ -11,8 +11,8 @@ one-command rollback. Today a checkpoint is mounted by hand and ONNX files are c
 ## Lifecycle
 
 ```
-train run (MLflow run: checkpoint + metrics)
-   │  make register CKPT=… | RUN_ID=…
+train run on Colab (Drive: checkpoint + run_summary.json [+ MLflow file store])
+   │  download from Drive, then: make register CKPT=… SUMMARY=…   (or RUN_ID=… for local MLflow runs)
    ▼
 export ONNX (opset 17, dynamic batch) → parity check vs PyTorch → model card
    │
@@ -31,7 +31,10 @@ served; gateway reports model_version=n
 1. **MLflow service.** Compose runs `mlflow server` (pinned image) with SQLite backend and a local artifact volume
    at `http://mlflow:5000` (host port 5001). Training logs to it when `MLFLOW_TRACKING_URI` is set; the file store
    stays the offline fallback. Upgrade MLflow from 2.12.1 to current 2.x (ask first if 3.x).
-2. **Register** (`python -m fastmri_knee.packaging register --checkpoint PATH | --run-id ID`):
+2. **Register** (`python -m fastmri_knee.packaging register --checkpoint PATH [--summary PATH] | --run-id ID`):
+   - `--summary` is the `run_summary.json` written by training (Colab path): source (`colab`), git sha,
+     `preprocess_version`, hyperparameters, val metrics, checkpoint sha256. Register refuses if the checkpoint hash
+     doesn't match the summary, or if the summary's `preprocess_version` differs from the installed package;
    - exports ONNX (reuse `export()`), runs parity on a fixed seeded batch of 4; **refuses to register** if
      max |torch − onnxruntime| > 1e-4;
    - writes `model_card.json`: registry version, source run id, git sha, checkpoint sha256, onnx sha256, opset,

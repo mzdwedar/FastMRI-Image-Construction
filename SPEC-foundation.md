@@ -44,7 +44,13 @@ correct and usable without torch (the gateway depends on this).
 9. **Repo cleanup.** Remove `build/`, `preds/`, `results/`, `triton_models/`, `lightning_logs/`, `unet_model.onnx`,
    `src/*.egg-info`, `split_data.py`, untrack `grafana_latency.png` (move to `docs/img/` if the README uses it).
    `latest_version.txt` (untracked, unknown purpose): ask before deleting.
-10. **Tooling.** ruff (`E,F,I,B,UP,SIM`) + `ruff format` replaces black; mypy strict for `preprocess.py` (and
+10. **Colab-ready training.** Training runs on Google Colab: the package installs with
+    `pip install "fastmri-knee[train] @ git+https://github.com/mzdwedar/fastmri@<sha>"`, so `requires-python` must
+    include Colab's Python version. Paths (data, checkpoints, outputs) are Hydra overrides pointing to Drive;
+    `accelerator: auto`. Every run writes `run_summary.json` next to the best checkpoint (git sha,
+    `preprocess_version`, hyperparameters, val metrics, checkpoint sha256) for registration (SPEC-model-packaging).
+    `notebooks/train_colab.ipynb` is the supported entry point.
+11. **Tooling.** ruff (`E,F,I,B,UP,SIM`) + `ruff format` replaces black; mypy strict for `preprocess.py` (and
     later `gateway/`, `packaging/`); pre-commit with ruff and gitleaks. `.env.example` documents every variable.
 
 ## Commands
@@ -93,7 +99,8 @@ make train       uv run python -m fastmri_knee.train
    exactly, and 0% of a centered phantom lands inside the 320×320 crop (vs 100% with shifts). Remaining step:
    confirm on one real slice, then fix (`PREPROCESS_VERSION = "2"`) and retrain. Infra work proceeds on random-init
    models either way.
-2. **Python 3.12.** Proposal: bump from 3.10 (EOL). Blocker to verify: `segmentation-models-pytorch==0.3.3` pins
+2. **Python 3.12.** Proposal: bump from 3.10 (EOL). Training on Colab adds a hard constraint: `requires-python`
+   must include the Colab runtime's Python (check `!python --version` on Colab). Blocker to verify: `segmentation-models-pytorch==0.3.3` pins
    `timm==0.9.2`; may need smp ≥ 0.3.4. Checkpoint compatibility must be tested.
 3. Normalization divides by the per-slice max, so absolute intensity is lost in the output. Acceptable for this
    project? (Affects the API response: we return normalized images plus the scale factor as an attribute.)

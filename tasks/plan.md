@@ -5,7 +5,7 @@ Branch: `refactor/prod-infra` (baseline `d9abbd6`). Each task = one or more atom
 
 ## Overview
 
-Seven modules, 56 tasks (+1 gated retrain), 8 phases. Infra work runs entirely on random-init models and synthetic `.h5` files, so it
+Seven modules, 60 tasks (+1 gated retrain on Colab), 8 phases. Infra work runs entirely on random-init models and synthetic `.h5` files, so it
 does not wait on the preprocessing fix or retraining. CI is introduced right after the foundation and gains a
 gate in every later phase.
 
@@ -35,9 +35,10 @@ gate in every later phase.
 | 5. Gateway | G1–G7, C4, P8 | System criteria 1, 2, 6 pass; e2e job in CI; old FastAPI backend removed |
 | 6. Observability | O1–O11, C5 | System criteria 3, 4 pass; `make check-configs` in CI |
 | 7. Model monitoring | M1–M6 | Drift demo fires alert in e2e; stats overhead ≤ 2% |
+| Training track (parallel) | K1–K4 | Colab smoke run writes `best.ckpt` + `run_summary.json`; `make register CKPT=… SUMMARY=…` passes gates |
 | 8. Release and hardening | C6–C8, D1 | All workflows green; tagged image runs via `GATEWAY_IMAGE=...`; README rewritten; human review → merge to `main` |
 
-Gated, outside infra scope: **R1** retrain on preprocessing v2 (user, GPU), after F8.
+Gated, outside infra scope: **R1** retrain on preprocessing v2 on Colab, after F8 and K2–K3.
 
 ## Dependency graph (critical path in bold)
 
@@ -52,6 +53,7 @@ T1,P6 → **G1 → G2 → G3 → G4 → G5 → G6** → G7, **C4** → P8
 G6 → O1 → O2 → O8;  O9 → O8;  O3 → O4 → O5 → O6;  O7 → O8;  O1,O3 → O10;  all → **O11**;  O3 → C5
 O1 → M1 → M2;  P2 → M3;  M2,M3 → M4 → M5 → M6
 G6 → C6;  C1..C6 → C8;  all → D1
+F5,F7 → K1 → K2 (Colab, manual);  P2,K1 → K3;  K2,C1 → K4;  F8,K2,K3 → R1(gated)
 ```
 
 ## Parallelization
@@ -60,6 +62,7 @@ G6 → C6;  C1..C6 → C8;  all → D1
 - Phase 3/4: T5 (GPU override) and C2 in parallel with anything.
 - Phase 6: tracks {O1→O2}, {O3→O4→O5→O6}, {O7}, {O9 spike} are parallel; join at O8/O10/O11.
 - Phase 7: M3 (packaging side) parallel with M1→M2 (gateway side).
+- Training track K1–K4 runs alongside Phases 3–6.
 - Shared contracts that must land before parallel work: metric names (SPEC-observability table), API schema
   (SPEC-gateway table), model card fields (SPEC-model-packaging).
 
@@ -74,11 +77,13 @@ G6 → C6;  C1..C6 → C8;  all → D1
 | Prometheus multiprocess mode with gunicorn: gauge semantics, stale files | Med | `PROMETHEUS_MULTIPROC_DIR` on tmpfs, cleaned at start; `multiprocess_mode` set per gauge; unit test with 2 workers in G7 |
 | GitHub-hosted runners too slow for full Compose e2e within 15 min | Med | Pre-pull images with cache, CPU-light random-init model, shortened alert `for:` via test override; measure in C4 |
 | Benchmark noise on shared runners | Low | `bench.yml` advisory with 30% threshold; local `make bench` required for batching changes |
+| Colab sessions disconnect; Drive FUSE is slow for h5 reads | Med | Resume from `last.ckpt` on Drive (K1); copy data to `/content` at start (K2) |
+| Colab Python/torch/CUDA drift from the local lockfile | Med | Install at a pinned git sha; `requires-python` covers Colab's version (Q2); torch/CUDA recorded in `run_summary.json` |
 | Scope creep (16 services in Compose) | Med | Each new service needs spec approval (Ask first); observability services behind a Compose profile if dev startup > 2 min |
 
 ## Open questions (block the tasks noted)
 
 All open questions and human setup steps are tracked as tasks in
-[todo.md § Decisions and setup](todo.md#decisions-and-setup): decisions `Q1–Q16`, setup `S1–S10`. Each lists its
+[todo.md § Decisions and setup](todo.md#decisions-and-setup): decisions `Q1–Q18`, setup `S1–S11`. Each lists its
 trigger (the task that needs it) and is tackled when that task is reached, not up front. A task that lists a `Q`/`S`
 dependency must not start until that item is checked off.
