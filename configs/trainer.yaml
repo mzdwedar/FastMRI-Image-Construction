@@ -2,7 +2,8 @@ trainer:
   gpus: 1
   seeds: 42
   log_every_n_steps: 1
-  accelerator: gpu
+  accelerator: ${oc.env:accelerator, auto}
+  source: ${oc.env:run_source, local}  # recorded in run_summary.json; the Colab notebook sets colab
   MLFLOW_TRACKING_URI: ${oc.env:MLFLOW_TRACKING_URI, "file:./mlruns"}
   TRAIN_RESULTS_FILE: ${oc.env:TRAIN_RESULTS_FILE, ""}
   EVAL_RESULTS_FILE: ${oc.env:EVAL_RESULTS_FILE, ""}
@@ -12,6 +13,7 @@ trainer:
   train:
     experiment_name: ${oc.env:experiment_name, fastmri}
     max_epochs: ${oc.decode:${oc.env:max_epochs, 1}}
+    max_steps: ${oc.decode:${oc.env:max_steps, -1}}
     strategy: auto
     results_fp: ""
     metric: psnr
@@ -56,8 +58,8 @@ trainer:
     min_delta: 0.0
 
   checkpoint:
-    path: ./mlflow_artifacts/checkpoints
-    filename: UnetModel-ep{epoch:02d}
+    path: ${oc.env:checkpoint_dir, ./mlflow_artifacts/checkpoints}
+    filename: best  # top_k=1 overwrites in place, so the best checkpoint is always best.ckpt
     n_epochs: 1
     top_k: 1
     monitor: psnr

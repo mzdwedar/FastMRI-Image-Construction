@@ -205,12 +205,15 @@ task that needs them is reached.
     Live on arm64: no-force refused; v1 → v2 → rollback → v1 served; corrupt ONNX refused with v1 still serving.
   - Deps: P5 · Files: `src/fastmri_knee/packaging/promote.py`, `src/fastmri_knee/packaging/__main__.py`, `Makefile`, `tests/unit/packaging/test_promote.py`
 
-- [ ] **P7: Packaging integration tests against Triton** — M
+- [x] **P7: Packaging integration tests against Triton** — M
   - Do: session fixture runs Triton (`docker run`, empty repo, explicit mode) + temp MLflow; tests: promote v1 → v2
     → rollback; corrupt ONNX → v2 keeps serving.
   - Acceptance: tests pass locally (or in CI if arm64 fallback applies).
   - Verify: `make test-integration`.
   - Deps: P6 · Files: `tests/integration/conftest.py`, `tests/integration/test_packaging_triton.py`
+  - Done: one test, ~11 s on arm64 with real Triton 24.08 (random host port, empty tmp repo, explicit mode) and a file-store
+    registry of 3 random-init versions: promote v1 → v2 (v1 unready) → rollback (v1 ready) → v3 with corrupted ONNX refused on
+    sha256, production stays v1 and serving. Skips if Docker or the image is absent (`TRITON_IMAGE` overrides).
 
 ### ✅ Checkpoint: Packaging — `make up model-random && make promote VERSION=1 ALIAS=production FORCE=1` → Triton serves v1; P7 green
 
@@ -218,7 +221,7 @@ task that needs them is reached.
 
 ## Phase 4 — Inference server (SPEC-inference-server)
 
-- [ ] **T2: Model config hardening** — S
+- [x] **T2: Model config hardening** — S
   - Do: templates gain `default_queue_policy` (REJECT, 5 s), `max_queue_size 256`, `model_warmup` (batch 1 and
     16), instance-count variable; threads from `TRITON_CPUS`.
   - Acceptance: golden files updated; Triton loads the config.
@@ -492,7 +495,12 @@ task that needs them is reached.
 Runs alongside the infra phases; K1 after F5/F7, K3 after P2. I can't execute Colab, so Colab runs are verified by
 you (manual check) and everything testable is covered locally on synthetic data.
 
-- [ ] **K1: Colab-ready training entrypoint and `run_summary.json`** — M
+- [x] **K1: Colab-ready training entrypoint and `run_summary.json`** — M
+  - Done 2026-11-12: `accelerator`, `max_steps`, `num_workers`, `checkpoint_dir`, `train_root`/`val_root`/`test_root` are env-overridable
+    (`oc.env`); `save_last` + resume from `<checkpoint_dir>/last.ckpt`; `run_summary.json` (`src/fastmri_knee/run_summary.py`)
+    matches what `register --summary` validates. Resume is verified at epoch boundaries; a run cut short by `max_steps`
+    does not continue on rerun (Lightning quirk), so use `max_epochs` for real runs. `train.py` now logs through the logger's
+    MLflow client, not the global active run.
   - Do: `accelerator: auto`; data/checkpoint/output paths overridable (Drive); resume from `last.ckpt` in the
     checkpoint dir (Colab disconnects); write `run_summary.json` next to the best checkpoint (git sha,
     `preprocess_version`, hparams, val metrics, checkpoint sha256, torch/CUDA versions, GPU name).
@@ -500,7 +508,8 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: `uv run pytest tests/unit/test_train_summary.py`.
   - Deps: F5, F7, Q2 · Files: `src/fastmri_knee/train.py`, `configs/trainer.yaml`, `configs/datamodule.yaml`, `tests/unit/test_train_summary.py`
 
-- [ ] **K2: Colab training notebook (run from VS Code)** — S
+- [x] **K2: Colab training notebook (run from VS Code)** — S
+  - Done 2026-11-12: clean Colab T4 smoke run `smoke3` at `f79ed5b` (1 epoch, 64 slices, 2+2 `.h5`) wrote `best.ckpt` + `run_summary.json` to Drive (real `git_sha`, val PSNR 15.35 / SSIM 0.424); registered locally as `fastmri-unet` v1 (K3) and promoted/synced to Triton. Run from the Colab web UI, not the VS Code kernel: `drive.mount` under the VS Code kernel is still unverified. Colab needs a uv Python 3.12 venv, cu121 torch/torchvision and `MPLBACKEND=agg` (all in the notebook). Q17=(a) and Q18=first-N-files were assumed, not confirmed; no subset manifest yet.
   - Context: you open the repo notebook in VS Code and connect it to a Colab GPU kernel with the Google Colab
     extension. The kernel is remote: it can't see local files or uncommitted changes, so it installs the package
     from a pushed commit, and outputs come back via Drive.
@@ -513,14 +522,16 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: manual — you run it on Colab and share the summary.
   - Deps: K1, Q17, Q18, S4 (commit must be pushed), S11 · Files: `notebooks/train_colab.ipynb`, `docs/training-colab.md`
 
-- [ ] **K3: Register a Colab run locally** — S
+- [x] **K3: Register a Colab run locally** — S
+  - Done 2026-11-12: refusals and summary-to-card fields were already in `registry.py` and covered by `test_register.py` (P2); added `make register CKPT=… [SUMMARY=…]`.
   - Do: `register --checkpoint … --summary …` (`make register CKPT=… SUMMARY=…`); refuse on checkpoint hash or
     `preprocess_version` mismatch; card `source=colab` with the summary's metrics so the PSNR promote gate works.
   - Acceptance: unit tests for both refusals and for card fields from a summary.
   - Verify: `uv run pytest tests/unit/packaging/test_register.py`.
   - Deps: P2, K1 · Files: `src/fastmri_knee/packaging/registry.py`, `Makefile`, `tests/unit/packaging/test_register.py`
 
-- [ ] **K4: Notebook hygiene in CI** — XS
+- [x] **K4: Notebook hygiene in CI** — XS
+  - Done 2026-11-12: `nbstripout` pre-commit hook; ruff now lints notebooks; `scripts/check_notebook_outputs.py` runs in `make lint` (so CI lint fails on committed outputs). `eda.ipynb` outputs stripped. The pre-commit hook itself is not exercised locally (needs `pre-commit install`).
   - Do: `nbstripout` in pre-commit; ruff lints the notebook; CI fails if outputs are committed.
   - Acceptance/Verify: committing a notebook with outputs fails pre-commit and CI.
   - Deps: K2, C1 · Files: `.pre-commit-config.yaml`
