@@ -93,7 +93,10 @@ task that needs them is reached.
 
 ## Phase 2 — CI bootstrap (SPEC-ci-cd)
 
-- [ ] **C1: `ci.yml` with lint, typecheck, unit, security** — M
+- [x] **C1: `ci.yml` with lint, typecheck, unit, security** — M
+  - Done locally 2026-11-12: workflow + `make ci`; actionlint and `make ci` pass. Not yet run on GitHub (needs S4 push and
+    the drill PR). `pip-audit` is report-only (`continue-on-error`) because the lock has 413 known vulnerabilities; make it
+    blocking after the dependency bumps (P1).
   - Do: setup-uv with lock-keyed cache; jobs call `make lint|typecheck|test`; `security` job: gitleaks +
     `pip-audit` on exported requirements; `actionlint`; SHA-pinned actions; `contents: read`; concurrency group.
   - Acceptance: green on the branch; unit job ≤ 5 min.
