@@ -1,24 +1,38 @@
 {
-  "uid": "triton-serving",
-  "title": "Triton: U-Net serving",
+  "uid": "fastmri-triton",
+  "title": "Triton",
   "tags": [
-    "fastmri",
-    "serving"
+    "fastmri"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
-  "refresh": "5s",
+  "refresh": "10s",
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
+  "links": [
+    {
+      "title": "Service overview",
+      "type": "link",
+      "url": "/d/fastmri-service",
+      "icon": "dashboard",
+      "keepTime": true
+    },
+    {
+      "title": "Infrastructure",
+      "type": "link",
+      "url": "/d/fastmri-infra",
+      "icon": "dashboard",
+      "keepTime": true
+    }
+  ],
   "panels": [
     {
-      "id": 1,
       "type": "timeseries",
-      "title": "Throughput (requests/s)",
-      "description": "Successful inference requests per second, per model.",
+      "title": "Inference rate (successful requests/s)",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -57,16 +71,20 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (model) (rate(nv_inference_request_success[30s]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model) (rate(nv_inference_request_success[$__rate_interval]))",
           "legendFormat": "{{model}}"
         }
-      ]
+      ],
+      "id": 1
     },
     {
-      "id": 2,
       "type": "timeseries",
-      "title": "Mean request latency",
-      "description": "rate(duration) / rate(count). The raw nv_*_duration_us metrics are cumulative counters, so plotting them directly only ever goes up.",
+      "title": "Failed requests/s",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -79,7 +97,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "reqps",
           "min": 0,
           "custom": {
             "lineWidth": 2,
@@ -105,16 +123,20 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (model) (rate(nv_inference_request_duration_us[30s])) / sum by (model) (rate(nv_inference_request_success[30s])) / 1e6",
-          "legendFormat": "{{model}}"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model, reason) (rate(nv_inference_request_failure[$__rate_interval]))",
+          "legendFormat": "{{model}} {{reason}}"
         }
-      ]
+      ],
+      "id": 2
     },
     {
-      "id": 3,
       "type": "timeseries",
-      "title": "Request latency p50 / p99 (server side)",
-      "description": "Triton summary quantiles (needs --metrics-config=summary_latencies=true).",
+      "title": "Queue vs compute (mean per request)",
+      "description": "Queue time rising while compute stays flat means the instance is saturated (alert: TritonQueueSaturation). The nv_*_duration_us metrics are cumulative, so they are rates divided by the request rate.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -153,21 +175,29 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (model) (nv_inference_request_summary_us{quantile=\"0.5\"}) / 1e6",
-          "legendFormat": "{{model}} p50"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model) (rate(nv_inference_queue_duration_us[$__rate_interval])) / sum by (model) (rate(nv_inference_request_success[$__rate_interval])) / 1e6",
+          "legendFormat": "{{model}} queue"
         },
         {
           "refId": "B",
-          "expr": "max by (model) (nv_inference_request_summary_us{quantile=\"0.99\"}) / 1e6",
-          "legendFormat": "{{model}} p99"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model) (rate(nv_inference_compute_infer_duration_us[$__rate_interval])) / sum by (model) (rate(nv_inference_request_success[$__rate_interval])) / 1e6",
+          "legendFormat": "{{model}} compute"
         }
-      ]
+      ],
+      "id": 3
     },
     {
-      "id": 4,
       "type": "timeseries",
-      "title": "Where the time goes: queue vs compute (mean per request)",
-      "description": "Queue time rising while compute stays flat means the instance is saturated: add instances or batch harder. Compute rising means bigger batches.",
+      "title": "Request latency p50 / p99 (Triton summary)",
+      "description": "Needs --metrics-config=summary_latencies=true.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -206,21 +236,29 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (model) (rate(nv_inference_queue_duration_us[30s])) / sum by (model) (rate(nv_inference_request_success[30s])) / 1e6",
-          "legendFormat": "{{model}} queue"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (model) (nv_inference_request_summary_us{quantile=\"0.5\"}) / 1e6",
+          "legendFormat": "{{model}} p50"
         },
         {
           "refId": "B",
-          "expr": "sum by (model) (rate(nv_inference_compute_infer_duration_us[30s])) / sum by (model) (rate(nv_inference_request_success[30s])) / 1e6",
-          "legendFormat": "{{model}} compute"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (model) (nv_inference_request_summary_us{quantile=\"0.99\"}) / 1e6",
+          "legendFormat": "{{model}} p99"
         }
-      ]
+      ],
+      "id": 4
     },
     {
-      "id": 5,
       "type": "timeseries",
       "title": "Average batch size",
-      "description": "Inferences per model execution. 1.0 means dynamic batching is not merging requests.",
+      "description": "nv_inference_count / nv_inference_exec_count. 1.0 means dynamic batching is not merging requests.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -259,15 +297,19 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (model) (rate(nv_inference_count[30s])) / sum by (model) (rate(nv_inference_exec_count[30s]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model) (rate(nv_inference_count[$__rate_interval])) / sum by (model) (rate(nv_inference_exec_count[$__rate_interval]))",
           "legendFormat": "{{model}}"
         }
-      ]
+      ],
+      "id": 5
     },
     {
-      "id": 6,
       "type": "timeseries",
-      "title": "Failed requests/s",
+      "title": "Pending requests",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -281,7 +323,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "none",
           "min": 0,
           "custom": {
             "lineWidth": 2,
@@ -307,15 +349,19 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (model, reason) (rate(nv_inference_request_failure[30s]))",
-          "legendFormat": "{{model}} {{reason}}"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model) (nv_inference_pending_request_count)",
+          "legendFormat": "{{model}}"
         }
-      ]
+      ],
+      "id": 6
     },
     {
-      "id": 7,
       "type": "timeseries",
-      "title": "Triton CPU utilisation",
+      "title": "Inferences and executions per version",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -323,6 +369,67 @@
       },
       "gridPos": {
         "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "stacking": {
+              "mode": "none"
+            },
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model, version) (rate(nv_inference_count[$__rate_interval]))",
+          "legendFormat": "{{model}} v{{version}} inferences"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model, version) (rate(nv_inference_exec_count[$__rate_interval]))",
+          "legendFormat": "{{model}} v{{version}} executions"
+        }
+      ],
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "Triton CPU and memory",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
         "y": 24,
         "w": 12,
         "h": 8
@@ -355,58 +462,15 @@
       "targets": [
         {
           "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "avg(nv_cpu_utilization)",
-          "legendFormat": "cpu"
+          "legendFormat": "cpu (fraction)"
         }
-      ]
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Triton memory",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 24,
-        "w": 12,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "min": 0,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "stacking": {
-              "mode": "none"
-            },
-            "spanNulls": true
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "avg(nv_cpu_memory_used_bytes)",
-          "legendFormat": "used"
-        }
-      ]
+      ],
+      "id": 8
     }
   ]
 }

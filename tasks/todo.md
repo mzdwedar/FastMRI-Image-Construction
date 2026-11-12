@@ -414,11 +414,18 @@ task that needs them is reached.
     SPEC-observability, "O8 decision"). 12 unit tests in `test_tracing.py`.
   - Deps: O7, O9 · Files: `src/fastmri_knee/gateway/telemetry.py`, `docker-compose.yml`, `monitoring/tempo/config.yml`, `monitoring/alloy/config.alloy`, `tests/unit/gateway/test_tracing.py`
 
-- [ ] **O10: Dashboards as code** — M
+- [x] **O10: Dashboards as code** — M
   - Do: refactor `build_dashboards.py`; Service overview, Triton, Infrastructure dashboards with spec panels and
     cross-links; `make dashboards`; remove old dashboards.
   - Acceptance: dashboards load with live data; regenerated JSON identical to committed.
   - Verify: `make dashboards && git diff --exit-code`; open Grafana.
+  - **Done (2026-11-12):** `service-overview.json` (14 panels), `triton.json` (8), `infrastructure.json` (8); old
+    `fastapi-dashboard.json`/`triton-dashboard.json` removed (the generator deletes JSON it no longer owns). Every
+    dashboard links to the other two; request-rate panel links to Loki by route, stage-time panel to Tempo slow
+    traces. 36 panel queries run against live Prometheus with no errors; the dashboards load in Grafana (API).
+    Availability/error-budget stats are inline 30 d queries at the 99.5 % target until O5's recording rules exist.
+    Grafana home is now the service overview. Not done: the `git diff --exit-code` check in CI (C5), clicking the
+    links in the UI. Model dashboard stays with M5.
   - Deps: O1, O3 · Files: `monitoring/grafana/build_dashboards.py`, `monitoring/grafana/dashboards/*.json`, `monitoring/grafana/provisioning/dashboards/dashboards.yml`, `Makefile`
 
 - [ ] **O11: Observability e2e tests** — M
