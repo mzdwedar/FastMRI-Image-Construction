@@ -5,7 +5,7 @@ import h5py  # type: ignore
 import numpy as np
 import torch
 
-from src.data import ifft2c as torch_ifft2c
+from fastmri_knee.data import ifft2c as torch_ifft2c
 
 # ---------- Config: tune these per your project ----------
 DATA_DIR = os.environ.get("FASTMRI_DATA_DIR", "data")
@@ -27,7 +27,7 @@ def open_k_and_recon(h5path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
     return k, recon, attrs
 
 def compute_ifft_magnitude(k: np.ndarray) -> np.ndarray:
-    # Use torch-centered IFFT from src.data then convert to numpy magnitude
+    # Use torch-centered IFFT from fastmri_knee.data then convert to numpy magnitude
     kk = k
     if kk.ndim == 3 and kk.shape[0] == 1:
         kk = kk[0]

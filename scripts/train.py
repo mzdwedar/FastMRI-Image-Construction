@@ -15,8 +15,8 @@ from pytorch_lightning.callbacks import Callback, LearningRateMonitor, ModelChec
 from pytorch_lightning.loggers import MLFlowLogger
 
 from scripts import utils
-from src.data import FastMRIDataModule
-from src.model import UnetModel
+from fastmri_knee.data import FastMRIDataModule
+from fastmri_knee.model import UnetModel
 
 
 class StopOnFirstImprovement(Callback):

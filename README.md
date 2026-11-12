@@ -73,16 +73,16 @@ This project targets the FastMRI knee single-coil dataset. Acquire data from the
   - `data/val/*.h5`
   - `data/test/*.h5` (optional)
 
-You can adapt to other datasets by modifying `configs/datamodule.yaml` and the `src/data.py` dataset/transform logic.
+You can adapt to other datasets by modifying `configs/datamodule.yaml` and the `src/fastmri_knee/data/__init__.py` dataset/transform logic.
 
 ## 6. Data Preprocessing
-`src/data.py` defines `FastMRICustomDataset` and `FastMRITransform` that read HDF5, apply optional masks, and return tensors for the UNet. Random undersampling masks are controlled in code and configs.
+`src/fastmri_knee/data/__init__.py` defines `FastMRICustomDataset` and `FastMRITransform` that read HDF5, apply optional masks, and return tensors for the UNet. Random undersampling masks are controlled in code and configs.
 
 ## 7. Feature Engineering
 MRI-specific preprocessing focuses on k-space undersampling and image normalization rather than classic tabular feature engineering. Extend `FastMRITransform` for domain-specific augmentations if needed.
 
 ## 8. Model Architecture / Approach
-- UNet-based architecture defined in `src/model.py` with configurable channels/pools (`configs/model.yaml`).
+- UNet-based architecture defined in `src/fastmri_knee/model.py` with configurable channels/pools (`configs/model.yaml`).
 - Loss/metrics (e.g., PSNR) tracked via PyTorch Lightning.
 
 ## 9. Training
@@ -208,9 +208,10 @@ Key files:
 │  ├─ predict_triton.py        # Client for Triton
 │  └─ convert_to_onnx.py       # Export ONNX for Triton
 ├─ src/
-│  ├─ data.py                  # Dataset + transforms
-│  ├─ model.py                 # LightningModule: UNet wrapper
-│  └─ resnet.py                # (optional) model variant
+│  └─ fastmri_knee/
+│     ├─ data/__init__.py      # Dataset + transforms
+│     ├─ model.py              # LightningModule: UNet wrapper
+│     └─ metrics.py            # NMSE
 ├─ monitoring/
 │  ├─ prometheus.yml           # FastAPI scrape config
 │  ├─ prometheus.triton.yml    # Triton scrape config

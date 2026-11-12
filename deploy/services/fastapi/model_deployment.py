@@ -5,7 +5,7 @@ import torch
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 
-from src.model import UnetModel
+from fastmri_knee.model import UnetModel
 
 
 class ModelDeployment:

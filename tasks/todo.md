@@ -33,7 +33,7 @@ task that needs them is reached.
   - Verify: `uv run pytest --collect-only -q`; `uv run pytest -m "not training"`.
   - Deps: Q3 · Files: `pyproject.toml`, `pytest.ini`(del), `tests/data/test_data.py`, `tests/code/test_train.py`, `.gitignore`
 
-- [ ] **F4: Move library code into `src/fastmri_knee/`** — M (pure refactor)
+- [x] **F4: Move library code into `src/fastmri_knee/`** — M (pure refactor)
   - Do: `git mv` `src/{data,model,metrics}.py` → `src/fastmri_knee/{data/__init__.py…}`; update imports in
     scripts, deploy, tests; hatchling build config so `uv sync` installs the package.
   - Acceptance: no behaviour change; `import fastmri_knee` works without `pythonpath`.
@@ -501,7 +501,7 @@ so the decision isn't lost.
   - Recommendation: (a). Evidence: F2 figure + NCC numbers.
   - Trigger: after F2 · Blocks: F8, R1 · Spec: SPEC-foundation OQ1
 
-- [ ] **Q2: Python version**
+- [x] **Q2: Python version** → decided 2026-11-12: 3.12 (requires-python >=3.10,<3.14)
   - Context: 3.10 reached end of life in Oct 2026. Risk: `segmentation-models-pytorch==0.3.3` / `timm==0.9.2` on 3.12.
     Hard constraint: `requires-python` must include Colab's runtime Python, or the package won't install there.
   - Options: 3.12 · 3.11 · stay on 3.10.

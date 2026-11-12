@@ -13,8 +13,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
 
-from src.data import FastMRIDataModule
-from src.model import UnetModel
+from fastmri_knee.data import FastMRIDataModule
+from fastmri_knee.model import UnetModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

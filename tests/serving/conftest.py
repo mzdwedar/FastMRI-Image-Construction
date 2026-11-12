@@ -17,7 +17,7 @@ def checkpoint(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def onnx_model(checkpoint, tmp_path_factory):
-    from src.model import UnetModel
+    from fastmri_knee.model import UnetModel
 
     module = UnetModel.load_from_checkpoint(checkpoint, map_location="cpu")
     path = tmp_path_factory.mktemp("onnx") / "model.onnx"

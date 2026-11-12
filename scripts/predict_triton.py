@@ -4,7 +4,7 @@ import tritonclient.http as httpclient
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
-from src.data import FastMRICustomDataset, FastMRITransform
+from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")

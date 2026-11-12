@@ -19,7 +19,7 @@ import torch
 from omegaconf import OmegaConf
 from pytorch_lightning import Trainer
 
-from src.model import UnetModel
+from fastmri_knee.model import UnetModel
 
 MODEL_REPO = Path("deploy/services/triton/models")
 DEFAULT_MODEL_DIRS = [MODEL_REPO / "unet_model", MODEL_REPO / "unet_model_nobatch"]

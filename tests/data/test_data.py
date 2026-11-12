@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import pytest
 
-from src.data import list_files
+from fastmri_knee.data import list_files
 
 
 # ---------- Tests ----------

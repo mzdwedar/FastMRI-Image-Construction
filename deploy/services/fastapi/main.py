@@ -32,7 +32,7 @@ from torch.utils.data import DataLoader
 
 from deploy.services.fastapi.model_deployment import ModelDeployment
 from monitoring.monitor_metrics import HardwareMonitor, InferenceMonitor
-from src.data import FastMRICustomDataset, FastMRITransform
+from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 
 logger = logging.getLogger("fastmri.serve")
 

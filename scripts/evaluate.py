@@ -9,7 +9,7 @@ from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 
 from scripts import utils
-from src.data import FastMRICustomDataset, FastMRITransform
+from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 
 from .config import logger
 from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
