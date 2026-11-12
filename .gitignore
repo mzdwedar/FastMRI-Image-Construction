@@ -208,8 +208,7 @@ __marimo__/
 
 
 # data
-data/
-!tests/data/
+/data/
 #mlflow
 /mlruns
 
@@ -227,7 +226,7 @@ mlflow_artifacts/
 lightning_logs/
 outputs/
 logs/
-data/
+/data/
 artifacts/
 results/
 *.ckpt

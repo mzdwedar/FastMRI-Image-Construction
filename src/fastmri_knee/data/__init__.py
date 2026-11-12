@@ -14,15 +14,16 @@ from tqdm import tqdm
 
 from fastmri_knee.preprocess import kspace_to_image, preprocess_target
 
-data_url = os.getenv('url')
+data_url = os.getenv("url")
 tar_path = "knee_singlecoil_val.tar.xz"
 
+
 def move_data(files, src_dir, dest_dir):
-    
     for filename in tqdm(files, desc=f"Moving files from {src_dir} to {dest_dir}"):
         source = os.path.join(src_dir, filename)
         dest = os.path.join(dest_dir, filename)
         shutil.move(source, dest)
+
 
 def list_files(directory, extension=".h5", limit=None):
     files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(extension)]
@@ -30,8 +31,8 @@ def list_files(directory, extension=".h5", limit=None):
         files = files[:limit]
     return files
 
-class InferenceCustomDataset(Dataset):
 
+class InferenceCustomDataset(Dataset):
     def __init__(self, data, transform=None):
         self.data = data
         self.length = len(next(iter(data.values())))
@@ -39,9 +40,10 @@ class InferenceCustomDataset(Dataset):
 
     def __len__(self):
         return self.length
-    
+
     def __getitem__(self, idx):
-        return {key:val[idx] for key, val in self.data.items()}
+        return {key: val[idx] for key, val in self.data.items()}
+
 
 def normalize(tensor: torch.Tensor) -> torch.Tensor:
     """Normalize a tensor to the range [0, 1]."""
@@ -50,7 +52,8 @@ def normalize(tensor: torch.Tensor) -> torch.Tensor:
 
     return normalized_tensor
 
-def split_singlecoil_subjects(data_root:str, train_root:str, val_root:str, train_ratio:float=0.8, seed:int=42):
+
+def split_singlecoil_subjects(data_root: str, train_root: str, val_root: str, train_ratio: float = 0.8, seed: int = 42):
     data_root = Path(data_root)
     train_root = Path(train_root)
     val_root = Path(val_root)
@@ -89,6 +92,7 @@ def split_singlecoil_subjects(data_root:str, train_root:str, val_root:str, train
     move_files(train_subjects, train_root)
     move_files(val_subjects, val_root)
 
+
 class FastMRICustomDataset(Dataset):
     """
     PyTorch Dataset for FastMRI singlecoil .h5 files.
@@ -101,6 +105,7 @@ class FastMRICustomDataset(Dataset):
         root (str): Path to the folder containing .h5 files.
         transform (callable, optional): Transform applied to (kspace, target, fname, slice_num).
     """
+
     def __init__(self, root: str, transform=None):
         if os.path.isfile(root) and root.endswith(".h5"):
             self.files = [root]
@@ -108,13 +113,13 @@ class FastMRICustomDataset(Dataset):
             self.files = list_files(root, extension=".h5")
         else:
             raise ValueError(f"Root {root} is not a valid file or directory")
-        
+
         self.examples = []
         for fname in self.files:
-            with h5py.File(fname, "r", libver='latest', swmr=True) as hf:
+            with h5py.File(fname, "r", libver="latest", swmr=True) as hf:
                 num_slices = hf["kspace"].shape[0]
                 self.examples += [(fname, slice_num) for slice_num in range(num_slices)]
-        
+
         self.transform = transform
         logging.info(f"Loaded {len(self.examples)} slices from {len(self.files)} files (path: {root})")
 
@@ -148,6 +153,7 @@ class FastMRICustomDataset(Dataset):
 
         return kspace, target, fname, slice_num
 
+
 # FFT utilities
 def fft2c(img: torch.Tensor) -> torch.Tensor:
     """
@@ -158,10 +164,11 @@ def fft2c(img: torch.Tensor) -> torch.Tensor:
                            Must be torch.complex64 or complex128.
 
     Returns:
-        torch.Tensor: K-space representation of the input image 
+        torch.Tensor: K-space representation of the input image
                       with the same shape as input.
     """
-    return torch.fft.fft2(img, norm="ortho") # pylint: disable=not-callable
+    return torch.fft.fft2(img, norm="ortho")  # pylint: disable=not-callable
+
 
 def ifft2c(kspace: torch.Tensor) -> torch.Tensor:
     """
@@ -172,10 +179,11 @@ def ifft2c(kspace: torch.Tensor) -> torch.Tensor:
                                Must be torch.complex64 or complex128.
 
     Returns:
-        torch.Tensor: Complex image reconstructed from k-space 
+        torch.Tensor: Complex image reconstructed from k-space
                       with the same shape as input.
     """
-    return torch.fft.ifft2(kspace, norm="ortho") # pylint: disable=not-callable
+    return torch.fft.ifft2(kspace, norm="ortho")  # pylint: disable=not-callable
+
 
 def complex_center_crop(data: torch.Tensor, shape: tuple) -> torch.Tensor:
     """
@@ -192,7 +200,8 @@ def complex_center_crop(data: torch.Tensor, shape: tuple) -> torch.Tensor:
     th, tw = shape
     w_from = (w - tw) // 2
     h_from = (h - th) // 2
-    return data[..., h_from:h_from+th, w_from:w_from+tw]
+    return data[..., h_from : h_from + th, w_from : w_from + tw]
+
 
 # Transform for k-space → input/target
 class FastMRITransform:
@@ -205,9 +214,10 @@ class FastMRITransform:
     - Returns magnitude image (input) and normalized target.
 
     Args:
-        mask_func (callable, optional): Function that generates an undersampling 
+        mask_func (callable, optional): Function that generates an undersampling
                                         mask given a k-space shape. Defaults to None.
     """
+
     def __init__(self, mask_func=None, crop_size=(320, 320)):
         self.mask_func = mask_func
         self.crop_size = crop_size
@@ -243,6 +253,7 @@ class FastMRITransform:
             return image, target, fname, slice_num
         return image, fname, slice_num
 
+
 class FastMRIDataModule(pl.LightningDataModule):
     """
     PyTorch Lightning DataModule for FastMRI singlecoil datasets.
@@ -259,16 +270,16 @@ class FastMRIDataModule(pl.LightningDataModule):
         batch_size (int): Batch size for all dataloaders.
         num_workers (int): Number of workers for dataloaders.
     """
+
     def __init__(
         self,
-        data_root:str,
+        data_root: str,
         train_root: str,
         val_root: str,
         test_root: str,
         mask_func=None,
         batch_size: int = 4,
         num_workers: int = 4,
-
     ):
         super().__init__()
         self.data_root = data_root
@@ -283,21 +294,25 @@ class FastMRIDataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
-    
+
     def prepare_data(self):
         """download the dataset from cloud"""
-        if not os.path.exists(os.path.join(self.data_root, 'train')):
+        if not os.path.exists(os.path.join(self.data_root, "train")):
             logging.info("Downloading and preparing data...")
             cmd = [
                 "aria2c",
-                "-c",                # continue downloads
-                "-x", "16",          # max connections per server
-                "-s", "16",          # split downloads
-                "-k", "1M",          # piece size
+                "-c",  # continue downloads
+                "-x",
+                "16",  # max connections per server
+                "-s",
+                "16",  # split downloads
+                "-k",
+                "1M",  # piece size
                 "--max-tries=5",
                 "--retry-wait=10",
-                "-o", tar_path,
-                data_url
+                "-o",
+                tar_path,
+                data_url,
             ]
 
             # Execute the command
@@ -311,10 +326,7 @@ class FastMRIDataModule(pl.LightningDataModule):
 
             # Extract the .tar.xz file
             # Extract and flatten (remove top-level folder)
-            subprocess.run(
-                ["tar", "--strip-components=1", "-xJf", tar_path, "-C", extract_path],
-                check=True
-            )
+            subprocess.run(["tar", "--strip-components=1", "-xJf", tar_path, "-C", extract_path], check=True)
 
             print(f"Extracted {tar_path} to {extract_path}")
 
@@ -337,18 +349,17 @@ class FastMRIDataModule(pl.LightningDataModule):
         """
         if stage == "fit" or stage is None:
             self.train_dataset = FastMRICustomDataset(
-                root=self.train_root,
-                transform=FastMRITransform(mask_func=self.mask_func)
+                root=self.train_root, transform=FastMRITransform(mask_func=self.mask_func)
             )
             self.val_dataset = FastMRICustomDataset(
                 root=self.val_root,
-                transform=FastMRITransform(mask_func=None)  # No mask for validation
+                transform=FastMRITransform(mask_func=None),  # No mask for validation
             )
 
         if stage == "test" or stage is None:
             self.test_dataset = FastMRICustomDataset(
                 root=self.test_root,
-                transform=FastMRITransform(mask_func=None)  # No mask for testing
+                transform=FastMRITransform(mask_func=None),  # No mask for testing
             )
 
     def train_dataloader(self):
@@ -358,7 +369,7 @@ class FastMRIDataModule(pl.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             persistent_workers=True,
-            pin_memory=True
+            pin_memory=True,
         )
 
     def val_dataloader(self):
@@ -368,7 +379,7 @@ class FastMRIDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=True,
-            pin_memory=True
+            pin_memory=True,
         )
 
     def test_dataloader(self):
@@ -378,5 +389,5 @@ class FastMRIDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=True,
-            pin_memory=True
+            pin_memory=True,
         )
