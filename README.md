@@ -244,6 +244,10 @@ pytest -q
 2) Extract files into `data/train`, `data/val`, and optionally `data/test`.
 3) Verify `configs/datamodule.yaml` paths.
 
+Or let the CLI do steps 1-2: put the signed archive link in the `url` environment variable and run `make data`
+(`python -m fastmri_knee.data.prepare --root data`; `--archive FILE` uses an already-downloaded tarball). It downloads,
+extracts and splits train/val by subject. Training only checks that the data exists and tells you what to run if not.
+
 #### Train
 ```bash
 uv sync

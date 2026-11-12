@@ -70,7 +70,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/test_preprocess*.py tests/unit/test_fftshift.py`.
   - Deps: F2, F7, Q1 · Files: `src/fastmri_knee/preprocess.py`, `tests/unit/test_fftshift.py`, `tests/unit/test_preprocess.py`
 
-- [ ] **F9: Data acquisition CLI out of the training path** — S
+- [x] **F9: Data acquisition CLI out of the training path** — S
   - Do: move download/extract/split from `FastMRIDataModule.prepare_data` to `fastmri_knee.data.prepare`
     (`make data`); `prepare_data` only checks presence and raises a clear error.
   - Acceptance: training never shells out to `aria2c`; missing data → actionable error message.

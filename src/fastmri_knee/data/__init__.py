@@ -1,28 +1,13 @@
 import logging
 import os
-import random
-import shutil
-import subprocess
-from collections import defaultdict
 from pathlib import Path
 
 import h5py
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
 
 from fastmri_knee.preprocess import kspace_to_image, preprocess_target
-
-data_url = os.getenv("url")
-tar_path = "knee_singlecoil_val.tar.xz"
-
-
-def move_data(files, src_dir, dest_dir):
-    for filename in tqdm(files, desc=f"Moving files from {src_dir} to {dest_dir}"):
-        source = os.path.join(src_dir, filename)
-        dest = os.path.join(dest_dir, filename)
-        shutil.move(source, dest)
 
 
 def list_files(directory, extension=".h5", limit=None):
@@ -53,44 +38,19 @@ def normalize(tensor: torch.Tensor) -> torch.Tensor:
     return normalized_tensor
 
 
-def split_singlecoil_subjects(data_root: str, train_root: str, val_root: str, train_ratio: float = 0.8, seed: int = 42):
-    data_root = Path(data_root)
-    train_root = Path(train_root)
-    val_root = Path(val_root)
+class DataNotFoundError(FileNotFoundError):
+    """Raised when the training/validation .h5 files are missing."""
 
-    os.makedirs(train_root, exist_ok=True)
-    os.makedirs(val_root, exist_ok=True)
 
-    # Step 1: Collect subject -> files
-    subject_to_files = defaultdict(list)
-    for fname in os.listdir(data_root):
-        if not fname.endswith(".h5"):
-            continue
-        fpath = data_root / fname
-        with h5py.File(fpath, "r") as f:
-            sid = str(f.attrs["patient_id"])
-
-        if sid is None:
-            raise RuntimeError(f"No subject ID found in {fname}")
-        subject_to_files[sid].append(fname)
-
-    # Step 2: Shuffle subjects and split
-    subjects = list(subject_to_files.keys())
-    random.seed(seed)
-    random.shuffle(subjects)
-
-    num_train = int(train_ratio * len(subjects))
-    train_subjects = set(subjects[:num_train])
-    val_subjects = set(subjects[num_train:])
-
-    # Step 3: Move files by subject
-    def move_files(subjects, target_root):
-        for sid in subjects:
-            for fname in subject_to_files[sid]:
-                shutil.move(str(data_root / fname), str(target_root / fname))
-
-    move_files(train_subjects, train_root)
-    move_files(val_subjects, val_root)
+def check_data_present(*roots: str) -> None:
+    """Fail fast with an actionable message instead of a cryptic empty-dataset error deep in the DataLoader."""
+    missing = [r for r in roots if not Path(r).is_dir() or not any(Path(r).glob("*.h5"))]
+    if missing:
+        raise DataNotFoundError(
+            f"No .h5 files in: {', '.join(map(str, missing))}. Prepare the data with `make data` "
+            "(needs the signed FastMRI URL in the `url` environment variable), or point "
+            "datamodule.train_root / datamodule.val_root at existing folders (e.g. on Google Drive)."
+        )
 
 
 class FastMRICustomDataset(Dataset):
@@ -296,52 +256,8 @@ class FastMRIDataModule(pl.LightningDataModule):
         self.test_dataset = None
 
     def prepare_data(self):
-        """download the dataset from cloud"""
-        if not os.path.exists(os.path.join(self.data_root, "train")):
-            logging.info("Downloading and preparing data...")
-            cmd = [
-                "aria2c",
-                "-c",  # continue downloads
-                "-x",
-                "16",  # max connections per server
-                "-s",
-                "16",  # split downloads
-                "-k",
-                "1M",  # piece size
-                "--max-tries=5",
-                "--retry-wait=10",
-                "-o",
-                tar_path,
-                data_url,
-            ]
-
-            # Execute the command
-            subprocess.run(cmd, check=True)
-
-            # Path to your downloaded tar.xz file
-            extract_path = "data"  # directory to extract to
-
-            # Make sure the extraction directory exists
-            os.makedirs(extract_path, exist_ok=True)
-
-            # Extract the .tar.xz file
-            # Extract and flatten (remove top-level folder)
-            subprocess.run(["tar", "--strip-components=1", "-xJf", tar_path, "-C", extract_path], check=True)
-
-            print(f"Extracted {tar_path} to {extract_path}")
-
-            # Remove the original tar.xz file
-            os.remove(tar_path)
-            print(f"Removed {tar_path}")
-
-            # split the data into train and val
-            # TODO: make the splitting reproducible
-            split_singlecoil_subjects(self.data_root, self.train_root, self.val_root)
-
-            print("Split data into train and val sets.")
-
-        else:
-            logging.info("Data already prepared.")
+        """Only verify the data exists; downloading and splitting live in `fastmri_knee.data.prepare`."""
+        check_data_present(self.train_root, self.val_root)
 
     def setup(self, stage=None):
         """
