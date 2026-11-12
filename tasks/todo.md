@@ -508,8 +508,8 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: `uv run pytest tests/unit/test_train_summary.py`.
   - Deps: F5, F7, Q2 · Files: `src/fastmri_knee/train.py`, `configs/trainer.yaml`, `configs/datamodule.yaml`, `tests/unit/test_train_summary.py`
 
-- [~] **K2: Colab training notebook (run from VS Code)** — S
-  - Written 2026-11-12, awaiting your Colab run: `notebooks/train_colab.ipynb`, `docs/training-colab.md`, `num_samples` now wired. Training command dry-run locally with the notebook's env vars (CPU, synthetic). Drive mount under the VS Code kernel and the GPU smoke run are unverified. Assumed Q17=(a), Q18=first-N-files for now.
+- [x] **K2: Colab training notebook (run from VS Code)** — S
+  - Done 2026-11-12: clean Colab T4 smoke run `smoke3` at `f79ed5b` (1 epoch, 64 slices, 2+2 `.h5`) wrote `best.ckpt` + `run_summary.json` to Drive (real `git_sha`, val PSNR 15.35 / SSIM 0.424); registered locally as `fastmri-unet` v1 (K3) and promoted/synced to Triton. Run from the Colab web UI, not the VS Code kernel: `drive.mount` under the VS Code kernel is still unverified. Colab needs a uv Python 3.12 venv, cu121 torch/torchvision and `MPLBACKEND=agg` (all in the notebook). Q17=(a) and Q18=first-N-files were assumed, not confirmed; no subset manifest yet.
   - Context: you open the repo notebook in VS Code and connect it to a Colab GPU kernel with the Google Colab
     extension. The kernel is remote: it can't see local files or uncommitted changes, so it installs the package
     from a pushed commit, and outputs come back via Drive.
