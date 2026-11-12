@@ -103,7 +103,9 @@ task that needs them is reached.
   - Verify: push; drill PR with a failing test and a lint error fails the right jobs.
   - Deps: F6, F10, S4 · Files: `.github/workflows/ci.yml`, `Makefile` (`ci` target)
 
-- [ ] **C2: Dependency update automation** — XS
+- [x] **C2: Dependency update automation** — XS
+  - Done 2026-11-12 (S7 = Dependabot, per recommendation): weekly, one grouped PR each for actions, Docker
+    (`deploy/services/fastapi`), uv. GitHub UI parse check pending the merge to `main`.
   - Do: Dependabot (or Renovate) for actions, Docker, uv; weekly, grouped.
   - Acceptance/Verify: config validates (GitHub UI shows it parsed).
   - Deps: C1, S7 · Files: `.github/dependabot.yml`
@@ -626,7 +628,7 @@ so the decision isn't lost.
     `GF_ADMIN_PASSWORD` in `.env`. `secrets/` and `.env` are gitignored.
   - Trigger: G5 / G6
 
-- [ ] **S7: Dependency bot choice**
+- [x] **S7: Dependency bot choice**
   - Options: Dependabot (no install) · Renovate (install the GitHub app).
   - Recommendation: Dependabot.
   - Trigger: C2
