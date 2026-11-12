@@ -5,7 +5,7 @@
 #   docker compose up -d triton prometheus grafana   # one backend only
 #
 # Gateway :8000   Triton: no host ports by default; `make up-dev` publishes HTTP :8100 / gRPC :8101
-# MLflow :5001   Prometheus :9090   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
+# MLflow :5001   Prometheus :9090   Alertmanager :9093   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
 
 x-cpu-limit: &cpu-limit
   cpus: "${SERVER_CPUS:-4}"   # CPU budget for the gateway
@@ -102,11 +102,75 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle   # `curl -X POST :9090/-/reload` after editing rules
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
+    depends_on:
+      - alertmanager
+
+  # Default receiver is alert-sink; a Slack receiver is added at start-up when SLACK_WEBHOOK_URL is set
+  # (render.sh, because Alertmanager does not expand environment variables in its config).
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    entrypoint: ["/bin/sh", "/etc/alertmanager/render.sh"]
+    environment:
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/alertmanager/render.sh:/etc/alertmanager/render.sh:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    mem_limit: 128m
+    restart: unless-stopped
+    depends_on:
+      - alert-sink
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  alert-sink:
+    build: ./monitoring/alert-sink
+    image: fastmri-alert-sink:latest
+    mem_limit: 64m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    expose:
+      - "8080"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro
+    mem_limit: 64m
+    restart: unless-stopped
+    expose:
+      - "9100"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    command:
+      - --housekeeping_interval=15s
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    mem_limit: 256m
+    restart: unless-stopped
+    expose:
+      - "8080"
 
   grafana:
     image: grafana/grafana:11.1.4
@@ -131,4 +195,5 @@ secrets:
 volumes:
   mlflow_data:
   prometheus_data:
+  alertmanager_data:
   grafana_data:

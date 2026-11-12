@@ -208,8 +208,9 @@ Key files:
 │     ├─ train.py evaluate.py predict.py tune.py   # Hydra entrypoints (python -m fastmri_knee.<name>)
 │     └─ packaging/export.py   # ONNX export + parity check
 ├─ monitoring/
-│  ├─ prometheus.yml           # FastAPI scrape config
-│  ├─ prometheus.triton.yml    # Triton scrape config
+│  ├─ prometheus/              # prometheus.yml (scrape jobs, Alertmanager), rules/
+│  ├─ alertmanager/            # alertmanager.yml + render.sh (adds Slack when SLACK_WEBHOOK_URL is set)
+│  ├─ alert-sink/              # local webhook receiver that logs every alert
 │  └─ grafana/                 # Provisioning + dashboards
 ├─ mlruns/                     # MLflow local tracking
 └─ data/                       # train/val/test splits
@@ -308,8 +309,10 @@ Notes:
 - Ensure the ONNX I/O names match those in `config.pbtxt` (`input`/`output`).
 
 ### Monitoring
-- FastAPI compose scrapes the app at `/metrics` (`monitoring/prometheus.yml`).
-- Triton compose scrapes Triton at `/metrics` (`monitoring/prometheus.triton.yml`).
+- One Prometheus (`monitoring/prometheus/prometheus.yml`) scrapes the gateway, Triton, Alertmanager, node-exporter and cAdvisor.
+- Alerts go to Alertmanager (:9093), whose default receiver is `alert-sink`; set `SLACK_WEBHOOK_URL` in `.env` to add Slack.
+- `make check-configs` validates the Compose file, Prometheus config and rules, and both Alertmanager variants (needs Docker).
+- cAdvisor identifies containers by cgroup `id`, not name, under Docker Desktop's containerd image store.
 - Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
 ### Pitfalls
