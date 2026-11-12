@@ -35,8 +35,8 @@ start), `unet_model` with dynamic batching for its queue policy only (no delay, 
      `max_queue_size: 256` so overload is rejected fast instead of queueing unbounded;
    - `model_warmup` with one batch of 1 and 16 zero inputs, so the first real request doesn't pay ORT init;
    - `instance_group` count template var (default 1 on CPU).
-5. **GPU profile.** `docker-compose.gpu.yml` adds `deploy.resources.reservations.devices` (nvidia, count 1) and sets
-   `TRITON_PROFILE=gpu`; template uses `KIND_GPU`, ORT CUDA EP with optional TensorRT accelerator
+5. **GPU profile.** `docker-compose.gpu.yml` adds `deploy.resources.reservations.devices` (nvidia, count 1); the profile is chosen on the host with
+   `TRITON_PROFILE=gpu make sync` (the container never reads it); template uses `KIND_GPU`, ORT CUDA EP with optional TensorRT accelerator
    (`precision_mode` FP16 behind a flag). Not run in CI; documented manual check in README.
 6. **Image.** Pin the Triton image to a single version in `.env` (`TRITON_IMAGE`). Upgrading from 24.08: ask first;
    proposal is to move to a 2026 release during this module, revalidating ORT parity.
