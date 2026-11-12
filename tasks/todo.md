@@ -94,8 +94,8 @@ task that needs them is reached.
 ## Phase 2 — CI bootstrap (SPEC-ci-cd)
 
 - [x] **C1: `ci.yml` with lint, typecheck, unit, security** — M
-  - Done locally 2026-11-12: workflow + `make ci`; actionlint and `make ci` pass. Not yet run on GitHub (needs S4 push and
-    the drill PR). `pip-audit` is report-only (`continue-on-error`) because the lock has 413 known vulnerabilities; make it
+  - Done 2026-11-12: workflow + `make ci`. Verified on GitHub: green on PR #3 (`refactor/prod-infra` → `main`); drill PR #2
+    (failing test + lint error) failed `lint` and `unit` only, then closed. `pip-audit` is report-only (`continue-on-error`) because the lock has 413 known vulnerabilities; make it
     blocking after the dependency bumps (P1).
   - Do: setup-uv with lock-keyed cache; jobs call `make lint|typecheck|test`; `security` job: gitleaks +
     `pip-audit` on exported requirements; `actionlint`; SHA-pinned actions; `contents: read`; concurrency group.
@@ -613,7 +613,7 @@ so the decision isn't lost.
   - → Decided 2026-11-12: none needed up front. F1 saves a random-init checkpoint under 3.10 and loads it under the
     new Python; real checkpoints come from Colab (K2).
 
-- [ ] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
+- [x] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
   - Do: confirm Actions enabled; `git push -u origin refactor/prod-infra` (I'll ask before pushing).
   - Trigger: C1 · Blocks: C1, C3, C4, C5, C7
 
