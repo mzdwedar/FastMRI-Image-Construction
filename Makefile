@@ -35,6 +35,16 @@ model-random: ## Register an untrained model (random_init=true) in MLflow; no da
 sync: ## Load the production model into Triton (needs `make up-dev`)
 	uv run python -m fastmri_knee.packaging sync --tracking-uri $(MLFLOW_TRACKING_URI)
 
+ALIAS ?= production
+
+promote: ## Gated promote: make promote VERSION=3 [ALIAS=production] [FORCE=1] [ALLOW_RANDOM=1]
+	@test -n "$(VERSION)" || { echo "usage: make promote VERSION=<n>"; exit 2; }
+	uv run python -m fastmri_knee.packaging promote --version $(VERSION) --alias $(ALIAS) \
+		$(if $(FORCE),--force) $(if $(ALLOW_RANDOM),--allow-random) --tracking-uri $(MLFLOW_TRACKING_URI)
+
+rollback: ## Restore previous_production (skips the PSNR gate)
+	uv run python -m fastmri_knee.packaging rollback --tracking-uri $(MLFLOW_TRACKING_URI)
+
 up: ## Start the Compose stack (MLflow :5001 plus serving)
 	mkdir -p deploy/model_repository
 	docker compose up -d
@@ -56,4 +66,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random sync up up-dev down data train clean
+.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random sync promote rollback up up-dev down data train clean

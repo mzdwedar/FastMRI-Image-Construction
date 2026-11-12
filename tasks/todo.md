@@ -194,11 +194,15 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_sync.py`.
   - Deps: P2, P4, T1 · Files: `src/fastmri_knee/packaging/{triton_repo,sync}.py`, `tests/unit/packaging/test_sync.py`
 
-- [ ] **P6: `promote` and `rollback` with gates** — M
+- [x] **P6: `promote` and `rollback` with gates** — M
   - Do: gates (preprocess mismatch, PSNR −0.5 dB, random-init → production unless `--allow-random`), `--force`
     logged; `previous_production` tag; rollback skips PSNR gate; Makefile targets.
   - Acceptance: each gate refuses with a clear message; rollback restores previous.
   - Verify: `uv run pytest tests/unit/packaging/test_promote.py`.
+  - Done: preprocess gate is never bypassable; `--force` overrides the PSNR and random-init gates (logged, tagged
+    `promote_forced`) so the checkpoint command works on random-init models; a candidate without PSNR is refused when
+    production has one; non-production aliases only move the alias (no sync); a failed sync restores alias and tag.
+    Live on arm64: no-force refused; v1 → v2 → rollback → v1 served; corrupt ONNX refused with v1 still serving.
   - Deps: P5 · Files: `src/fastmri_knee/packaging/promote.py`, `src/fastmri_knee/packaging/__main__.py`, `Makefile`, `tests/unit/packaging/test_promote.py`
 
 - [ ] **P7: Packaging integration tests against Triton** — M
