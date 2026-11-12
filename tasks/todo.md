@@ -302,7 +302,7 @@ task that needs them is reached.
   - Verify: `make up && curl …` with synthetic h5; `docker compose ps` all healthy.
   - Deps: G5, Q9, S6 · Files: `deploy/gateway/Dockerfile`, `docker-compose.yml`, `.env.example`, `deploy/services/fastapi/*`(del), `tests/serving/test_api.py`(del)
 
-- [ ] **G7: Gateway integration, contract, and image tests** — M
+- [x] **G7: Gateway integration, contract, and image tests** — M
   - Do: integration: reconstruction equals local ORT on same input (`atol=1e-5`), `/readyz` flips when Triton
     stops; OpenAPI snapshot; image checks (no torch, ≤ 500 MB, non-root).
   - Acceptance/Verify: `make test test-integration` green; coverage ≥ 85% on `gateway/`.
