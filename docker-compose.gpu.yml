@@ -1,0 +1,16 @@
+# GPU override for Triton (T5). Needs an NVIDIA GPU, the NVIDIA driver and the NVIDIA Container Toolkit on the host;
+# Docker Desktop on macOS has none of these, so this file is only checked with `docker compose config` in CI.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#   TRITON_PROFILE=gpu make sync        # renders the gpu template (KIND_GPU, ORT CUDA) and loads it
+#
+# `make sync` runs on the host, so TRITON_PROFILE is read there, not inside the container.
+services:
+  triton:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
