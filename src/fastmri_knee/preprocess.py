@@ -39,6 +39,26 @@ def center_crop(data: npt.NDArray[Any], shape: tuple[int, int] = CROP_SIZE) -> n
     return data[..., h_from : h_from + th, w_from : w_from + tw]
 
 
+def kspace_to_image_scaled(
+    kspace: ComplexArray,
+    mask: FloatArray | None = None,
+    crop_size: tuple[int, int] = CROP_SIZE,
+) -> tuple[F32Array, float]:
+    """Like `kspace_to_image`, but also returns the scale the image was divided by (its pre-crop max).
+
+    `normalize` uses the max of whatever array it is given, so pass one slice at a time to get a per-slice
+    scale; `image * scale` then restores the original intensity (up to the epsilon).
+    """
+    if kspace.ndim == 2:
+        kspace = kspace[None, ...]
+    kspace = kspace.astype(np.complex64, copy=False)
+    if mask is not None:
+        kspace = kspace * mask
+    image = np.abs(np.fft.ifft2(kspace, norm="ortho")).astype(np.float32, copy=False)
+    scale = float(image.max())
+    return center_crop(normalize(image), crop_size).astype(np.float32, copy=False), scale
+
+
 def kspace_to_image(
     kspace: ComplexArray,
     mask: FloatArray | None = None,
@@ -48,13 +68,7 @@ def kspace_to_image(
 
     `mask` (broadcastable against k-space) simulates undersampling.
     """
-    if kspace.ndim == 2:
-        kspace = kspace[None, ...]
-    kspace = kspace.astype(np.complex64, copy=False)
-    if mask is not None:
-        kspace = kspace * mask
-    image = np.abs(np.fft.ifft2(kspace, norm="ortho"))
-    return center_crop(normalize(image), crop_size).astype(np.float32, copy=False)
+    return kspace_to_image_scaled(kspace, mask, crop_size)[0]
 
 
 def preprocess_target(target: FloatArray, crop_size: tuple[int, int] = CROP_SIZE) -> F32Array:

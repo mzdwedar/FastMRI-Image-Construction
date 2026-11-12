@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     max_slices: int = Field(default=64, ge=1)
     max_inflight: int = Field(default=32, ge=1)
 
+    tmp_dir: str | None = None  # where uploads are spooled; the system temp dir when unset
+
     api_keys_file: str = "/run/secrets/api_keys"
     auth_disabled: bool = False
     otlp_endpoint: str | None = None
