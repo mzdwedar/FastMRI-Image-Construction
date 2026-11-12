@@ -386,10 +386,14 @@ task that needs them is reached.
     pages for the two alerts are O6; the dashboard still uses its inline 30 d queries.
   - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
 
-- [ ] **O6: Runbooks** — S
+- [x] **O6: Runbooks** — S
   - Do: `docs/runbooks/<Alert>.md` for every alert (symptoms, dashboards, causes, commands); `runbook_url` annotation
     on every rule; test that every alert has an existing runbook file.
   - Acceptance/Verify: `uv run pytest tests/unit/test_runbooks.py`.
+  - **Done (2026-11-12):** 11 pages (one per alert, including the two burn-rate alerts), each with Symptoms, Dashboards,
+    Likely causes and Remediation. `tests/unit/test_runbooks.py` (14 tests) checks that every alert's `runbook_url` equals
+    the repo URL of an existing page, the four sections exist, dashboard links use provisioned uids, and no page lacks an alert.
+    Commands were checked against the Makefile and Compose file; not run end to end against a live incident.
   - Deps: O5 · Files: `docs/runbooks/*.md`, `tests/unit/test_runbooks.py`
 
 - [x] **O7: Loki and Alloy log pipeline** — S
