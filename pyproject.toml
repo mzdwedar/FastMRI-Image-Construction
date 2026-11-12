@@ -120,5 +120,5 @@ files = ["src/fastmri_knee/preprocess.py", "src/fastmri_knee/packaging", "src/fa
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["onnxruntime.*"]
+module = ["onnxruntime.*", "tritonclient.*"]
 ignore_missing_imports = true
