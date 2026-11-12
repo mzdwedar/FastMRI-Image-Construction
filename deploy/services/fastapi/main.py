@@ -31,8 +31,8 @@ from starlette.concurrency import run_in_threadpool
 from torch.utils.data import DataLoader
 
 from deploy.services.fastapi.model_deployment import ModelDeployment
-from monitoring.monitor_metrics import HardwareMonitor, InferenceMonitor
 from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
+from monitoring.monitor_metrics import HardwareMonitor, InferenceMonitor
 
 logger = logging.getLogger("fastmri.serve")
 

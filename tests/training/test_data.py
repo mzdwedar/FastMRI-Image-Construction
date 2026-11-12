@@ -1,9 +1,9 @@
 from pathlib import Path
 
-import training_helpers as cfg
 import h5py
 import numpy as np
 import pytest
+import training_helpers as cfg
 
 from fastmri_knee.data import list_files
 

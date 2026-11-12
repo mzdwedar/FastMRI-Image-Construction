@@ -14,10 +14,10 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
 
-from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee import utils
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
+from fastmri_knee.paths import CONFIG_PATH
 
 
 class StopOnFirstImprovement(Callback):

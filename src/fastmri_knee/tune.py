@@ -13,9 +13,9 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import MLFlowLogger
 
-from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
+from fastmri_knee.paths import CONFIG_PATH
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

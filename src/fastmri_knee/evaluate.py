@@ -8,11 +8,10 @@ from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 
-from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee import utils
-from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
-
 from fastmri_knee.config import logger
+from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
+from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.predict import TorchPredictor, get_best_checkpoint, get_best_run_id
 
 

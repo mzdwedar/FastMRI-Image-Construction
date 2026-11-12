@@ -14,9 +14,9 @@ from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.data import FastMRICustomDataset, FastMRITransform
 from fastmri_knee.model import UnetModel
+from fastmri_knee.paths import CONFIG_PATH
 
 
 class TorchPredictor:
