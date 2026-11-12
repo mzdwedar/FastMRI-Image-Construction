@@ -161,7 +161,7 @@ open http://localhost:3000   # Grafana  ·  :9090 Prometheus  ·  :9093 Alertman
 - [ ] `make check-configs` passes, including alert rule unit tests.
 - [ ] System success criteria 3 and 4 in SPEC.md pass in the e2e suite.
 - [ ] Four dashboards load without errors with live data; links between metrics, logs, and traces work.
-- [ ] Each alert has a runbook; psutil-based `HardwareMonitor` removed.
+- [x] Each alert has a runbook; psutil-based `HardwareMonitor` removed.
 
 ## Open questions
 
