@@ -228,7 +228,11 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_render.py`; `make sync` loads.
   - Deps: P4 · Files: `deploy/triton/templates/*.pbtxt`, `tests/unit/packaging/golden/*`
 
-- [ ] **T3: Triton integration tests** — M
+- [x] **T3: Triton integration tests** — M · done 2026-11-12: `tests/integration/test_triton.py` (3 tests, ~75 s). Finding:
+  Triton 24.08 returns 200 on `/v2/health/ready` for an empty repo even with strict readiness; the per-model endpoint
+  (400) is what gates readiness, so the test asserts that and SPEC-inference-server is corrected. Also fixed
+  `test_image.py::test_image_has_no_torch` (the test imported the app without gunicorn, which creates
+  `/dev/shm/prometheus`); `make test-integration` is green (11 passed).
   - Do: tests: strict readiness (empty → 503), output equals onnxruntime (`atol=1e-5`), overload (512 concurrent)
     rejected while server stays live.
   - Acceptance/Verify: `make test-integration` green.

@@ -162,3 +162,53 @@ def gateway_triton(gateway_onnx, tmp_path_factory):
         yield triton
     finally:
         _docker("rm", "-f", triton.name)
+
+
+# --- T3: a Triton with an empty repository (strict readiness) ---------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def empty_triton(tmp_path_factory):
+    """Triton started on an empty model repository, as `make up` does before the first promote."""
+    if shutil.which("docker") is None or _docker("info").returncode != 0:
+        pytest.skip("Docker is not available")
+    if _docker("image", "inspect", TRITON_IMAGE).returncode != 0:
+        pytest.skip(f"{TRITON_IMAGE} is not present locally (docker pull it, or set TRITON_IMAGE)")
+    repo = tmp_path_factory.mktemp("empty_repo")
+    repo.chmod(0o755)
+    name, http_port = f"fastmri-it-empty-{uuid.uuid4().hex[:8]}", _free_port()
+    started = _docker(
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        name,
+        "-p",
+        f"127.0.0.1:{http_port}:8000",
+        "-v",
+        f"{repo}:/models:ro",
+        TRITON_IMAGE,
+        "tritonserver",
+        "--model-repository=/models",
+        "--model-control-mode=explicit",
+        f"--load-model={MODEL}",
+        "--strict-readiness=true",
+        "--exit-on-error=false",
+    )  # fmt: skip  (the same flags docker-compose.yml uses)
+    if started.returncode != 0:
+        pytest.skip(f"could not start Triton: {started.stderr.strip()}")
+    url = f"http://127.0.0.1:{http_port}"
+    try:
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                if httpx.get(f"{url}/v2/health/live", timeout=2).status_code == 200:
+                    break
+            except httpx.HTTPError:
+                pass
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"Triton not live after 60s:\n{_docker('logs', name).stdout[-2000:]}")
+            time.sleep(1)
+        yield url
+    finally:
+        _docker("rm", "-f", name)

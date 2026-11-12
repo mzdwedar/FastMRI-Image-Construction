@@ -58,8 +58,9 @@ make bench-compare                       # diff latest results vs benchmarks/bas
 
 ## Testing strategy
 
-- Integration (`integration`): container starts with an empty repo → `/v2/health/live` 200, `/v2/health/ready` 503
-  (strict readiness, no model); after sync, ready 200; inference output shape/dtype correct and equal to
+- Integration (`integration`): container starts with an empty repo → `/v2/health/live` 200, `/v2/models/unet_model/ready` 400
+  (no model; Triton 24.08 keeps server-level `/v2/health/ready` at 200 for a model that was never found — verified in T3);
+  after sync, ready 200; inference output shape/dtype correct and equal to
   onnxruntime on the same input (`atol=1e-5`); queue overflow → requests rejected, server stays live.
 - Config: rendered `config.pbtxt` files parse (Triton loads them in the integration test); golden-file tests in
   packaging.
