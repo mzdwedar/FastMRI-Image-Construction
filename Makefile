@@ -94,10 +94,13 @@ ci-e2e: ## What e2e.yml runs: build, up, model-random, promote, test-e2e, down -
 	@mkdir -p secrets deploy/model_repository
 	@# fresh key per run: the hash file is replaced, the plaintext key only lives in this shell
 	@rm -f secrets/api_keys
+	@# api-key writes 0600; on Linux the bind mount keeps that mode and the gateway (uid 10001) cannot read it,
+	@# so the hash file is made readable here (hashes only, throwaway runner)
 	@set -e; \
 	trap 'rc=$$?; if [ $$rc -ne 0 ]; then mkdir -p e2e-logs; $(E2E_COMPOSE) logs --no-color > e2e-logs/compose.log 2>&1 || true; fi; $(E2E_COMPOSE) down -v' EXIT; \
 	export E2E_API_KEY=$$($(MAKE) -s api-key); \
 	test -n "$$E2E_API_KEY"; \
+	chmod 644 secrets/api_keys; \
 	$(E2E_COMPOSE) up -d --build --wait mlflow triton gateway; \
 	$(MAKE) model-random; \
 	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
