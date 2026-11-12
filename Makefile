@@ -88,6 +88,21 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
 		-c 'for u in "" https://hooks.invalid/T/B/x; do SLACK_WEBHOOK_URL=$$u sh /cfg/render.sh --check /tmp/am.yml && amtool check-config /tmp/am.yml || exit 1; done'
 
+E2E_COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+
+ci-e2e: ## What e2e.yml runs: build, up, model-random, promote, test-e2e, down -v (always)
+	@mkdir -p secrets deploy/model_repository
+	@# fresh key per run: the hash file is replaced, the plaintext key only lives in this shell
+	@rm -f secrets/api_keys
+	@set -e; \
+	trap 'rc=$$?; if [ $$rc -ne 0 ]; then mkdir -p e2e-logs; $(E2E_COMPOSE) logs --no-color > e2e-logs/compose.log 2>&1 || true; fi; $(E2E_COMPOSE) down -v' EXIT; \
+	export E2E_API_KEY=$$($(MAKE) -s api-key); \
+	test -n "$$E2E_API_KEY"; \
+	$(E2E_COMPOSE) up -d --build --wait mlflow triton gateway; \
+	$(MAKE) model-random; \
+	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
+	$(MAKE) test-e2e
+
 down: ## Stop the Compose stack
 	docker compose down
 
@@ -101,4 +116,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs down data train clean

@@ -242,3 +242,6 @@ latest_version.txt
 
 # Local secrets (S6): API key hashes, never commit
 secrets/
+
+# e2e failure logs (make ci-e2e)
+e2e-logs/
