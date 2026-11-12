@@ -75,6 +75,7 @@ def sync(
     alias: str = "production",
     profile: str = "cpu",
     threads: int = 4,
+    instances: int = 1,
     repo: Path = DEFAULT_REPO,
     triton_url: str = "http://localhost:8100",
     timeout: float = READY_TIMEOUT_S,
@@ -95,7 +96,7 @@ def sync(
     model_dir = repo / name
     config_path = model_dir / "config.pbtxt"
     version_dir = model_dir / str(version)
-    wanted_config = render(profile, version=version, threads=threads)
+    wanted_config = render(profile, version=version, threads=threads, instances=instances)
 
     with http or httpx.Client(base_url=triton_url, timeout=10.0) as session:
         previous_config = config_path.read_text() if config_path.exists() else None

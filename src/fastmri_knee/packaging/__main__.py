@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     syn.add_argument("--alias", default="production")
     syn.add_argument("--profile", choices=PROFILES, default=os.environ.get("TRITON_PROFILE", "cpu"))
     syn.add_argument("--threads", type=int, default=int(os.environ.get("TRITON_CPUS", "4")))
+    syn.add_argument("--instances", type=int, default=int(os.environ.get("TRITON_INSTANCES", "1")))
     syn.add_argument("--repo", type=Path, default=DEFAULT_REPO)
     syn.add_argument("--triton-url", default=os.environ.get("TRITON_URL", "http://localhost:8100"))
     syn.add_argument("--timeout", type=float, default=READY_TIMEOUT_S)
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
                 alias=args.alias,
                 profile=args.profile,
                 threads=args.threads,
+                instances=args.instances,
                 repo=args.repo,
                 triton_url=args.triton_url,
                 timeout=args.timeout,
