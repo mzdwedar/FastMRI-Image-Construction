@@ -232,3 +232,8 @@ artifacts/
 results/
 *.ckpt
 *.onnx
+
+# Local run outputs (kept on disk, never committed)
+preds/
+triton_models/
+latest_version.txt

@@ -132,7 +132,7 @@ Notes:
 
 ## 12. Results / Visualizations
 - Metrics CSV and hyperparams are stored under `lightning_logs/` and `mlruns/`.
-- A sample Grafana panel `grafana_latency.png` shows serving latency distribution when FastAPI is instrumented.
+- A sample Grafana panel `docs/img/grafana_latency.png` shows serving latency distribution when FastAPI is instrumented.
 
 ## 13. Inference / Prediction
 Batch prediction to write volumes per file:
@@ -330,7 +330,7 @@ Notes:
 ### Monitoring
 - FastAPI compose scrapes the app at `/metrics` (`monitoring/prometheus.yml`).
 - Triton compose scrapes Triton at `/metrics` (`monitoring/prometheus.triton.yml`).
-- Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`grafana_latency.png`).
+- Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
 ### Pitfalls
 - Keep patient/series-level splits to avoid data leakage.

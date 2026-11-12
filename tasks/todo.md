@@ -25,7 +25,9 @@ task that needs them is reached.
   - Verify: manual inspection of the figure.
   - Deps: S11 · Files: `docs/img/fftshift-check.png`, `SPEC-foundation.md`
 
-- [ ] **F3: Repo cleanup and test discovery** — S
+- [x] **F3: Repo cleanup and test discovery** — S
+  - Done 2026-11-12 without deleting anything (Q3 = no): generated dirs and `split_data.py` stay on disk, now
+    gitignored (`split_data.py` stays untracked; its broken import is still there). Delete them by hand when ready.
   - Do: delete `build/ preds/ results/ triton_models/ lightning_logs/ unet_model.onnx src/*.egg-info split_data.py`;
     untrack `grafana_latency.png` (→ `docs/img/` if README uses it); move pytest config into `pyproject.toml`
     with markers `integration`, `e2e`, `training`, `testpaths=["tests"]`; mark data-dependent tests `training`.
@@ -508,7 +510,7 @@ so the decision isn't lost.
   - Recommendation: 3.12 if F1 passes, else 3.11. Evidence: F1 results.
   - Trigger: after F1 · Blocks: F6 · Spec: SPEC-foundation OQ2
 
-- [ ] **Q3: Delete `latest_version.txt`?**
+- [x] **Q3: Delete `latest_version.txt`?** → decided 2026-11-12: no deletions; keep local files, gitignore them
   - Context: untracked, contents `10.30.0,2025-09-01T16:14:47Z`, no references in code.
   - Recommendation: delete unless you know what writes it.
   - Trigger: F3 · Blocks: F3 (only that file)

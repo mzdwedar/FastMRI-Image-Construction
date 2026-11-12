@@ -92,3 +92,13 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Temporary: the legacy FastAPI app (deploy/services/fastapi) is imported as `deploy.*` until task G6 replaces it
+pythonpath = ["."]
+markers = [
+    "integration: needs Docker (real Triton container)",
+    "e2e: needs the full Compose stack running",
+    "training: needs the FastMRI dataset in data/; never runs in CI",
+]

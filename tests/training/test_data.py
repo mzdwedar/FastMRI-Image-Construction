@@ -1,11 +1,13 @@
 from pathlib import Path
 
-import conftest as cfg
+import training_helpers as cfg
 import h5py
 import numpy as np
 import pytest
 
 from fastmri_knee.data import list_files
+
+pytestmark = pytest.mark.training
 
 
 # ---------- Tests ----------
