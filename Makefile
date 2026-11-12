@@ -63,6 +63,24 @@ up-dev: ## Same, and publish Triton HTTP :8100 / gRPC :8101 on the host
 	mkdir -p deploy/model_repository
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
+PROM_IMAGE ?= prom/prometheus:v2.54.1
+AM_IMAGE ?= prom/alertmanager:v0.27.0
+
+check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and Alertmanager config (needs Docker)
+	docker compose config -q
+	docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
+		check config /etc/prometheus/prometheus.yml
+	@if ls monitoring/prometheus/rules/*.yml >/dev/null 2>&1; then \
+		docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
+			check rules /etc/prometheus/rules/*.yml; fi
+	@if ls monitoring/prometheus/tests/*.yml >/dev/null 2>&1; then \
+		docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
+			test rules /etc/prometheus/tests/*.yml; fi
+	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
+	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
+		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
+		-c 'for u in "" https://hooks.invalid/T/B/x; do SLACK_WEBHOOK_URL=$$u sh /cfg/render.sh --check /tmp/am.yml && amtool check-config /tmp/am.yml || exit 1; done'
+
 down: ## Stop the Compose stack
 	docker compose down
 
@@ -76,4 +94,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs down data train clean

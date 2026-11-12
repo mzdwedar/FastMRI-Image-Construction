@@ -346,11 +346,15 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_logging.py`.
   - Deps: O1 · Files: `src/fastmri_knee/gateway/logging.py`, `tests/unit/gateway/test_logging.py`
 
-- [ ] **O3: Alertmanager, alert-sink, node-exporter, cAdvisor; config checks** — M · needs Q11
+- [x] **O3: Alertmanager, alert-sink, node-exporter, cAdvisor; config checks** — M · needs Q11
   - Do: Compose services (pinned); Prometheus scrape jobs + `rule_files`; `alertmanager.yml` (sink default,
     Slack when env set); `make check-configs` (promtool, amtool, `docker compose config`).
   - Acceptance: all targets `up` in Prometheus; `make check-configs` passes.
   - Verify: `make up check-configs`; Prometheus `/targets`.
+  - Done 2026-11-12. Built on the Q11 recommendation (alert-sink default, Slack only when `SLACK_WEBHOOK_URL` is set);
+    Q11 and S2 are still unticked pending the owner's confirmation. Six targets `up` on Docker Desktop (8 GB); new
+    services are capped at 64-256 MiB. cAdvisor (v0.52.1) cannot name containers under Docker's containerd image
+    store, so its series carry the cgroup `id` only: O4's container alerts must key on `id` (or add a mapping).
   - Deps: G6, Q11, S2 (S5 if Slack) · Files: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`, `monitoring/alertmanager/alertmanager.yml`, `monitoring/alert-sink/` , `Makefile`
 
 - [ ] **O4: Symptom and infra alerts with rule tests** — M

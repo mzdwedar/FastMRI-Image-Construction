@@ -1,0 +1,15 @@
+# Default receiver: the local alert-sink (logs every alert; the e2e test reads it back).
+# render.sh appends a Slack config to the `default` receiver when SLACK_WEBHOOK_URL is set, so `receivers`
+# must stay the last key in this file and `default` its last receiver.
+route:
+  receiver: default
+  group_by: [alertname, severity]
+  group_wait: 10s        # keeps "TritonDown reaches the sink within 2 min" comfortably true
+  group_interval: 1m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: http://alert-sink:8080/alerts
+        send_resolved: true
