@@ -1,5 +1,6 @@
-import requests
 import os
+
+import requests
 
 url = "http://localhost:8000/predict/"
 

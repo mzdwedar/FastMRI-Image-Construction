@@ -1,16 +1,15 @@
-import os
-import subprocess
-import tarfile
 import logging
+import os
 import random
 import shutil
-import h5py
-import torch
-from torch.utils.data import Dataset
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader
+import subprocess
 from collections import defaultdict
 from pathlib import Path
+
+import h5py
+import pytorch_lightning as pl
+import torch
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 data_url = os.getenv('url')

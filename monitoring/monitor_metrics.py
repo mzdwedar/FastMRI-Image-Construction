@@ -1,115 +1,62 @@
-from prometheus_client import Counter, Gauge, Histogram
+"""Prometheus metrics for the FastAPI service.
+
+Triton exports its own metrics on :8002/metrics; these are the equivalents for the
+Python service, so both backends can be compared on the same Grafana dashboards.
+"""
+
+import threading
+
 import psutil
-import time
+from prometheus_client import Counter, Gauge, Histogram
+
+# 5 ms .. 30 s: covers a single-slice /infer call up to a full-volume /predict
+LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.25, 0.5, 0.75, 1, 2.5, 5, 10, 30)
+BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64)
 
 
-class inferenceMonitor:
-    """Class representing an inference monitor that tracks the number of inferences made."""
+class InferenceMonitor:
+    """Request, latency, batch-size and error metrics, labelled by endpoint."""
 
-    def __init__(self):
-        """
-        Initializes the metrics for monitoring prediction and evaluation requests:
-        - predict_requests_total (Counter): A counter to track the total number of prediction requests.
-        - evaluate_requests_total (Counter): A counter to track the total number of evaluation requests.
-        - inference_latency (Histogram): A histogram to measure the latency of model predictions, 
-                                           with specified buckets for latency in seconds.
-        """
-
-        self.predict_requests_total = Counter("predict_requests_total", "Total number of predict requests")
-        self.evaluate_requests_total = Counter("evaluate_requests_total", "Total number of evaluate requests")
-        self.inference_latency = Histogram(
-                                    name="predict_inference_latency_seconds",
-                                    documentation="Time spent in model.predict() for /predict endpoint",
-                                    buckets=(0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10)  # 10ms → 10s
-                                    )
-        
-        self.inference_throughput = Gauge("inference_throughput_samples_per_second", "Inference throughput in samples/second")
-
-    def increment_predict_count(self) -> None:
-        """
-        Increment the inference counter by one.
-        
-        ---
-        Returns:
-            None
-        """
-        self.predict_requests_total.inc()
-    
-    def increment_evaluate_count(self) -> None:
-        """
-        Increment the evaluation counter by one.
-
-        ---
-        Returns:
-            None
-        """
-        self.evaluate_requests_total.inc()
-
-    def observe_latency(self, duration: float) -> None:
-        """
-        Observe and record the latency of an inference operation.
-        Args:
-            duration (float): The time taken for the inference operation in seconds.
-            
-        ---
-        Returns:
-            None
-        """
-        self.inference_latency.observe(duration)
-
-    def observe_throughput(self, num_samples: int, duration: float) -> None:
-        """
-        Observe and record the throughput of an inference operation.
-        Args:
-            num_samples (int): The number of samples processed during the inference operation.
-            duration (float): The time taken for the inference operation in seconds.
-            
-        ---
-        Returns:
-            None
-        """
-        if duration > 0:
-            throughput = num_samples / duration
-            self.inference_throughput.set(throughput)
+    def __init__(self) -> None:
+        self.requests = Counter("inference_requests_total", "Inference requests received", ["endpoint"])
+        self.failures = Counter("inference_failures_total", "Inference requests that failed", ["endpoint"])
+        self.latency = Histogram(
+            "inference_latency_seconds",
+            "Wall time spent in model inference, excluding upload and response",
+            ["endpoint"],
+            buckets=LATENCY_BUCKETS,
+        )
+        self.batch_size = Histogram(
+            "inference_batch_size", "Slices per forward pass", ["endpoint"], buckets=BATCH_BUCKETS
+        )
+        self.slices = Counter("inference_slices_total", "MRI slices reconstructed", ["endpoint"])
 
 
-class hardwareMonitor:
-    """Class representing a hardware monitor that tracks CPU and memory usage."""
+class HardwareMonitor:
+    """Samples host CPU/memory and process RSS in a background thread."""
 
-    def __init__(self):
-        """
-        Initialize following metrics:
-        - `host_cpu_percent`: Gauge to track the percentage of CPU usage on the host.
-        - `host_mem_percent`: Gauge to track the percentage of memory usage on the host.
-        - `process_rss_bytes`: Gauge to track the Resident Set Size (RSS) in bytes of the application process.
-        Additionally, it initializes a `psutil.Process` instance to monitor the current process and primes the CPU percent calculation to avoid an initial value of 0.0.
-        """
+    def __init__(self, interval_s: float = 5.0) -> None:
         self.host_cpu_percent = Gauge("host_cpu_percent", "Host CPU percent")
         self.host_mem_percent = Gauge("host_mem_percent", "Host memory percent")
-        self.process_rss_bytes = Gauge("process_rss_bytes", "App process RSS bytes")
-        self.process = psutil.Process()
+        self.process_rss_bytes = Gauge("process_rss_bytes", "Service process resident memory in bytes")
+        self.interval_s = interval_s
+        self._process = psutil.Process()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        psutil.cpu_percent(interval=None)  # prime: the first call always returns 0.0
 
-        # Prime cpu_percent to avoid initial 0.0
-        psutil.cpu_percent(interval=None)
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self.host_cpu_percent.set(psutil.cpu_percent(interval=None))
+            self.host_mem_percent.set(psutil.virtual_memory().percent)
+            self.process_rss_bytes.set(self._process.memory_info().rss)
+            self._stop.wait(self.interval_s)
 
-    def sample(self) -> None:
-        """
-        Sample system the following process metrics at regular intervals:
-        - Host CPU usage percentage
-        - Host memory usage percentage
-        - Resident Set Size (RSS) of the process memory
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, name="hardware-monitor", daemon=True)
+        self._thread.start()
 
-        ---
-        Returns:
-            None
-        """
-
-        while True:
-            try:
-                self.host_cpu_percent.set(psutil.cpu_percent(interval=None))
-                self.host_mem_percent.set(psutil.virtual_memory().percent)
-                self.process_rss_bytes.set(self.process.memory_info().rss)
-            except Exception:
-                # Do not crash the sampler; just continue
-                pass
-            time.sleep(5)
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self.interval_s)

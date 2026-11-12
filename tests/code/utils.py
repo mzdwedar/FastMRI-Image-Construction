@@ -1,6 +1,6 @@
 import uuid
 
-from scripts.config import mlflow
+import mlflow
 
 
 def generate_experiment_name(prefix: str = "test") -> str:

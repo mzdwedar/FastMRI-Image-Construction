@@ -1,10 +1,12 @@
-import numpy as np
-import pytest
 from pathlib import Path
-import h5py 
-from src.utils import list_files
 
 import conftest as cfg
+import h5py
+import numpy as np
+import pytest
+
+from src.data import list_files
+
 
 # ---------- Tests ----------
 def get_train_val_h5_files():

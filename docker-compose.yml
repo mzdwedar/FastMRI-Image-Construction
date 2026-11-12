@@ -1,0 +1,78 @@
+# Serving + monitoring stack. Prerequisite: a checkpoint and its ONNX export
+#   uv run python -m scripts.convert_to_onnx --checkpoint artifacts/model.ckpt
+#
+#   docker compose up -d --build        # everything
+#   docker compose up -d triton prometheus grafana   # one backend only
+#
+# FastAPI :8000   Triton HTTP :8100 / gRPC :8101 / metrics :8102
+# Prometheus :9090   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
+
+x-cpu-limit: &cpu-limit
+  cpus: "${SERVER_CPUS:-4}"   # both backends get the same CPU budget
+
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: deploy/services/fastapi/Dockerfile
+    image: fastmri-fastapi:latest
+    environment:
+      CHECKPOINT_PATH: /artifacts/model.ckpt
+      NUM_THREADS: "${SERVER_CPUS:-4}"
+    volumes:
+      - ./artifacts:/artifacts:ro
+    ports:
+      - "8000:8000"
+    <<: *cpu-limit
+
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.08-py3
+    command:
+      - tritonserver
+      - --model-repository=/models
+      - --metrics-config=summary_latencies=true   # p50/p90/p99 summaries on /metrics
+      - --log-verbose=0
+    shm_size: 1gb
+    volumes:
+      - ./deploy/services/triton/models:/models:ro
+    ports:
+      - "8100:8000"
+      - "8101:8001"
+      - "8102:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v2/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    <<: *cpu-limit
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-change-me}"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/triton-dashboard.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:

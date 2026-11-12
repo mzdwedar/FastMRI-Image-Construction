@@ -1,12 +1,12 @@
+import pytorch_lightning as pl
+import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
-from torchmetrics.image import PeakSignalNoiseRatio
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-import segmentation_models_pytorch as smp
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 
 from .metrics import nmse
+
 
 class UnetModel(pl.LightningModule):
     """

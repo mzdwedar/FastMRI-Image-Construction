@@ -3,3 +3,10 @@ defaults:
   - datamodule
   - trainer
   - triton
+  - _self_
+
+# Keep the working directory at the repo root so relative paths (mlruns/, data/)
+# resolve the same in train, evaluate and predict
+hydra:
+  job:
+    chdir: false

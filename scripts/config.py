@@ -1,8 +1,7 @@
-import sys
 import logging
+import logging.config
+import sys
 from pathlib import Path
-
-import mlflow
 
 # Directories
 ROOT_DIR = Path(__file__).parent.parent.absolute()

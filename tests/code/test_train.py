@@ -1,10 +1,11 @@
 import os
+
 import pytest
-from omegaconf import OmegaConf
-from hydra import compose, initialize
-from pathlib import Path
-from scripts.train import train_fn
 import utils
+from hydra import compose, initialize
+
+from scripts.train import train_fn
+
 
 @pytest.mark.training
 def test_train_model(dataset_loc: str=None):

@@ -1,21 +1,20 @@
-import os
 import logging
-import hydra
+import os
+from collections import defaultdict
+from pathlib import Path
+
 import h5py
-from omegaconf import DictConfig
+import hydra
+import mlflow
+import numpy as np
+from hydra.utils import to_absolute_path
+from mlflow.tracking import MlflowClient
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
-import mlflow
-from mlflow.tracking import MlflowClient
-from urllib.parse import urlparse
-from pathlib import Path
-from hydra.utils import to_absolute_path
-from omegaconf import OmegaConf
-from collections import defaultdict
-import numpy as np
 from tqdm import tqdm
 
-from src.data import FastMRITransform, InferenceCustomDataset, FastMRICustomDataset
+from src.data import FastMRICustomDataset, FastMRITransform
 from src.model import UnetModel
 
 

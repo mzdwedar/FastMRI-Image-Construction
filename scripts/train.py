@@ -1,21 +1,23 @@
-import json
 import datetime
-import os
-import hydra
+import json
 import logging
-import mlflow
+import os
 from typing import Dict, Optional
-from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import ModelCheckpoint, Callback, LearningRateMonitor
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import MLFlowLogger
-import pytorch_lightning as pl
-from mlflow.exceptions import MlflowException
-from fastmri.data.subsample import RandomMaskFunc
 
-from src.model import UnetModel
-from src.data import FastMRIDataModule
+import hydra
+import mlflow
+import pytorch_lightning as pl
+from fastmri.data.subsample import RandomMaskFunc
+from mlflow.exceptions import MlflowException
+from omegaconf import DictConfig, OmegaConf
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import Callback, LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.loggers import MLFlowLogger
+
 from scripts import utils
+from src.data import FastMRIDataModule
+from src.model import UnetModel
+
 
 class StopOnFirstImprovement(Callback):
     """Stop training immediately after the first improvement in the monitored metric."""

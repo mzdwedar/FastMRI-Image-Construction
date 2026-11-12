@@ -1,229 +1,175 @@
-import os
-import json
+"""FastAPI serving for the U-Net reconstruction model (PyTorch backend).
+
+Endpoints
+- GET  /health    liveness/readiness
+- POST /infer     preprocessed slices as raw float32 bytes (N x 1 x 320 x 320), same
+                  contract as the Triton model, so the two backends can be load-tested alike
+- POST /predict   one FastMRI .h5 file -> .h5 with the reconstructed volume
+- POST /evaluate  .h5 files with ground truth -> PSNR / SSIM / NMSE
+- GET  /metrics   Prometheus
+
+Run:  CHECKPOINT_PATH=artifacts/model.ckpt uvicorn deploy.services.fastapi.main:app --port 8000
+"""
+
 import argparse
-import asyncio
 import logging
-import tempfile
-import traceback
-from time import perf_counter
-from pathlib import Path
-from collections import defaultdict
-from contextlib import asynccontextmanager
-from http import HTTPStatus
+import os
 import shutil
+import tempfile
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 import h5py
 import numpy as np
 import uvicorn
-from torch.utils.data import DataLoader
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
+from torch.utils.data import DataLoader
 
 from deploy.services.fastapi.model_deployment import ModelDeployment
-from deploy.services.fastapi.schemas.inputs import EvaluateRequest, PredictRequest
-from src.data import FastMRITransform, FastMRICustomDataset
-from monitoring.monitor_metrics import hardwareMonitor, inferenceMonitor
+from monitoring.monitor_metrics import HardwareMonitor, InferenceMonitor
+from src.data import FastMRICustomDataset, FastMRITransform
 
+logger = logging.getLogger("fastmri.serve")
 
-inference_monitor = inferenceMonitor()
-hardware_monitor = hardwareMonitor()
+IMAGE_SHAPE = (1, 320, 320)
+SLICE_BYTES = int(np.prod(IMAGE_SHAPE)) * 4  # float32
+MAX_SLICES_PER_REQUEST = 64
+
+inference_monitor = InferenceMonitor()
+hardware_monitor = HardwareMonitor()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    parser = argparse.ArgumentParser(description="Serve a model with FastAPI")
-    parser.add_argument("--checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
-    parser.add_argument("--run_id", help="run ID to use for serving.")
-    args, _ = parser.parse_known_args()
-
-    app.state.model = ModelDeployment(checkpoint_path=args.checkpoint_path)
-    app.state.hardware_task = asyncio.create_task(hardware_monitor.sample())
-
-    logging.info("Application startup complete.")
+    checkpoint_path = os.environ.get("CHECKPOINT_PATH")
+    if not checkpoint_path:
+        raise RuntimeError("Set CHECKPOINT_PATH to a trained Lightning checkpoint (.ckpt)")
+    num_threads = int(os.environ["NUM_THREADS"]) if os.environ.get("NUM_THREADS") else None
+    app.state.model = ModelDeployment(checkpoint_path, num_threads=num_threads)
+    hardware_monitor.start()
+    logger.info("Model loaded from %s", checkpoint_path)
     yield
-
-    app.state.hardware_task.cancel()
-    logging.info("Cleanup done, shutting down")
+    hardware_monitor.stop()
 
 
-app = FastAPI(
-    title="model serving",
-    description="Serve a model with FastAPI",
-    version="0.1",
-    lifespan=lifespan
-)
+app = FastAPI(title="fastmri-knee", description="U-Net MRI reconstruction", version="0.2", lifespan=lifespan)
 
-@app.get("/health/")
+
+@app.exception_handler(Exception)
+async def unhandled(request: Request, exc: Exception):
+    # Full traceback goes to the server log, never to the client
+    logger.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(status_code=500, content={"error": "internal server error"})
+
+
+@app.get("/health")
 def health():
-    return Response(
-            content=HTTPStatus.OK.phrase,
-            status_code=HTTPStatus.OK,
+    return {"status": "ok"}
+
+
+@app.post("/infer")
+async def infer(request: Request):
+    body = await request.body()
+    if not body or len(body) % SLICE_BYTES:
+        raise HTTPException(400, f"body must be float32 slices of shape {IMAGE_SHAPE} ({SLICE_BYTES} bytes each)")
+    n = len(body) // SLICE_BYTES
+    if n > MAX_SLICES_PER_REQUEST:
+        raise HTTPException(413, f"at most {MAX_SLICES_PER_REQUEST} slices per request")
+    images = np.frombuffer(body, dtype=np.float32).reshape(n, *IMAGE_SHAPE)
+
+    inference_monitor.requests.labels("infer").inc()
+    start = time.perf_counter()
+    try:
+        # Off the event loop: a CPU forward pass would otherwise block every other request
+        out = await run_in_threadpool(app.state.model.infer, images)
+    except Exception:
+        inference_monitor.failures.labels("infer").inc()
+        raise
+    inference_monitor.latency.labels("infer").observe(time.perf_counter() - start)
+    inference_monitor.batch_size.labels("infer").observe(n)
+    inference_monitor.slices.labels("infer").inc(n)
+    return Response(content=out.astype(np.float32).tobytes(), media_type="application/octet-stream")
+
+
+def _save_uploads(files: list[UploadFile], directory: str) -> None:
+    for f in files:
+        name = os.path.basename(f.filename or "")
+        if not name.endswith(".h5"):
+            raise HTTPException(400, f"{name or 'upload'} is not an .h5 file")
+        with open(os.path.join(directory, name), "wb") as out:
+            shutil.copyfileobj(f.file, out)
+
+
+def _loader(path: str) -> DataLoader:
+    try:
+        dataset = FastMRICustomDataset(path, transform=FastMRITransform(mask_func=None))
+    except (KeyError, OSError, ValueError) as exc:
+        raise HTTPException(400, f"not a FastMRI single-coil file: {exc}") from exc
+    return DataLoader(dataset, batch_size=8, shuffle=False, num_workers=0)
+
+
+# Sync handlers: FastAPI runs them in its threadpool, so file I/O and inference don't block the loop
+@app.post("/predict")
+def predict(file: UploadFile = File(...)):
+    inference_monitor.requests.labels("predict").inc()
+    workdir = tempfile.mkdtemp(prefix="predict-")
+    try:
+        _save_uploads([file], workdir)
+        name = os.path.basename(file.filename)
+        loader = _loader(os.path.join(workdir, name))
+        start = time.perf_counter()
+        volumes = app.state.model.predict_volumes(loader)
+        inference_monitor.latency.labels("predict").observe(time.perf_counter() - start)
+        volume = next(iter(volumes.values()))
+        inference_monitor.slices.labels("predict").inc(len(volume))
+        out_path = Path(workdir) / name.replace(".h5", "_pred.h5")
+        with h5py.File(out_path, "w") as f:
+            f.create_dataset("pred", data=volume)
+    except Exception as exc:
+        if not isinstance(exc, HTTPException):
+            inference_monitor.failures.labels("predict").inc()
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise
+    return FileResponse(
+        out_path,
+        media_type="application/x-hdf5",
+        filename=out_path.name,
+        background=BackgroundTask(shutil.rmtree, workdir, ignore_errors=True),
     )
 
-@app.post("/predict/")
-async def predict(request: PredictRequest):
 
-    file = request.file
-    fname = os.path.basename(file.filename)
-    if not fname.endswith('.h5'):
-        return Response(
-            content=json.dumps({"error": "Invalid file type"}),
-            status_code=HTTPStatus.BAD_REQUEST,
-            media_type="application/json"
-        )
-
-
-    model = app.state.model
-    inference_monitor.increment_predict_count()
-    start = perf_counter()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as temp_file:
-        content = await file.read()
-        temp_file.write(content)
-        temp_file_path = temp_file.name
-
+@app.post("/evaluate")
+def evaluate(files: list[UploadFile] = File(...)):
+    inference_monitor.requests.labels("evaluate").inc()
+    workdir = tempfile.mkdtemp(prefix="evaluate-")
     try:
-        dataset = FastMRICustomDataset(temp_file_path, transform=FastMRITransform(mask_func=None))
-        data_loader = DataLoader(dataset, batch_size=8,
-                                shuffle=False,
-                                num_workers=min(4, os.cpu_count()),
-                                pin_memory=True,
-                                persistent_workers=True)
-        
-        output = await model.predict(data_loader)
-        
-        pred_by_file = defaultdict(list)
-        for out_slice in output:
-            full_path_fname = out_slice['fname'][0]
-            pred_by_file[full_path_fname].append((out_slice['slice_num'].item(), out_slice['pred'].cpu().numpy()))
-
-
-        for full_path_fname, slices in pred_by_file.items():
-            slices.sort(key=lambda x: x[0])  # Sort by slice number
-            volume = np.stack([s[1] for s in slices], axis=0)
-            fname = os.path.basename(full_path_fname)
-            out_fname = fname.replace('.h5', '_pred.h5')
-
-            out_path = Path('./results') / out_fname
-
-            with h5py.File(out_path, 'w') as f:
-                f.create_dataset('pred', data=volume)
-        
-        original_filename = os.path.basename(file.filename)
-
-        duration = perf_counter() - start
-        inference_monitor.observe_latency(duration=duration)
-        inference_monitor.observe_throughput(num_samples=len(dataset), duration=duration)
-
-        return FileResponse(
-            path=out_path,
-            media_type="application/x-hdf5",
-            filename=original_filename,
-            headers={"X-Filename": original_filename}
-        )
-    
-    except FileNotFoundError:
-        return Response(
-            content=json.dumps({"error": "File not found", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.NOT_FOUND,
-            media_type="application/json"
-        )
-    except ValueError:
-        return Response(
-            content=json.dumps({"error": "Value error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.BAD_REQUEST,
-            media_type="application/json"
-        )
-    except RuntimeError:
-        return Response(
-            content=json.dumps({"error": "Runtime error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            media_type="application/json"
-        )
-    except Exception:
-        
-        return Response(
-            content=json.dumps({"error": "Unexpected error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            media_type="application/json"
-        )
-        
+        _save_uploads(files, workdir)
+        start = time.perf_counter()
+        metrics = app.state.model.evaluate(_loader(workdir))
+        inference_monitor.latency.labels("evaluate").observe(time.perf_counter() - start)
+        return {"metrics": metrics}
+    except Exception as exc:
+        if not isinstance(exc, HTTPException):
+            inference_monitor.failures.labels("evaluate").inc()
+        raise
     finally:
-        temp_file.close()
-        if os.path.exists(temp_file_path):
-            os.unlink(temp_file_path)
+        shutil.rmtree(workdir, ignore_errors=True)
 
-@app.post("/evaluate/")
-async def evaluate(request: EvaluateRequest):
-    model = app.state.model
-    inference_monitor.increment_evaluate_count()
 
-    files = request.files
-    temp_files = []
-    
-    try:
-        temp_dir = tempfile.mkdtemp()
-        for file in files:
-            if not file.filename.endswith('.h5'):
-                raise ValueError(f"File {file.filename} is not an H5 file")
-            
-            temp_file_path = os.path.join(temp_dir, file.filename)
-            with open(temp_file_path, 'wb') as temp_file:
-                content = await file.read()
-                temp_file.write(content)
-            temp_files.append(temp_file_path)
-        
-        
-        dataset = FastMRICustomDataset(temp_dir, transform=FastMRITransform(mask_func=None))
-        data_loader = DataLoader(dataset, batch_size=8,
-                                shuffle=False,
-                                num_workers=min(4, os.cpu_count()),
-                                pin_memory=True,
-                                persistent_workers=True
-                                )
-        
-        result = await model.evaluate(data_loader)
-
-        return Response(
-            content=json.dumps(result),
-            status_code=HTTPStatus.OK,
-            media_type="application/json",
-            headers={"Content-Disposition": "inline; filename=evaluation.json"}
-        )
-        
-    except FileNotFoundError:
-        return Response(
-            content=json.dumps({"error": "File not found", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.NOT_FOUND,
-            media_type="application/json"
-        )
-    except ValueError:
-        return Response(
-            content=json.dumps({"error": "Value error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.BAD_REQUEST,
-            media_type="application/json"
-        )
-    except RuntimeError:
-        return Response(
-            content=json.dumps({"error": "Runtime error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            media_type="application/json"
-        )
-    except Exception:
-        return Response(
-            content=json.dumps({"error": "Unexpected error", "traceback": traceback.format_exc()}),
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            media_type="application/json"
-        )
-    finally:
-        
-        if 'temp_dir' in locals() and os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-# Expose Prometheus /metrics endpoint and instrument default metrics
-Instrumentator().instrument(app).expose(app)
+Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app).expose(app, include_in_schema=False)
 
 
 if __name__ == "__main__":
-    uvicorn.run("deploy.main:app", host="0.0.0.0", port=8000, reload=False)
+    parser = argparse.ArgumentParser(description="Serve the U-Net with FastAPI")
+    parser.add_argument("--checkpoint_path", default=os.environ.get("CHECKPOINT_PATH"))
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
+    if args.checkpoint_path:
+        os.environ["CHECKPOINT_PATH"] = args.checkpoint_path
+    uvicorn.run("deploy.services.fastapi.main:app", host=args.host, port=args.port)

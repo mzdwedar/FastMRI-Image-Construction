@@ -221,3 +221,14 @@ lightning_logs/
 *.npy
 
 *.DS_Store
+# Local runs and model artifacts (generated, never committed)
+mlruns/
+mlflow_artifacts/
+lightning_logs/
+outputs/
+logs/
+data/
+artifacts/
+results/
+*.ckpt
+*.onnx

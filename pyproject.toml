@@ -1,12 +1,16 @@
 [project]
 name = "fastmri-knee"
 version = "0.1.0"
-description = "MRI reconstruction with FastMRI and PyTorch"
+description = "Knee MRI reconstruction (U-Net) served with NVIDIA Triton and FastAPI, monitored with Prometheus and Grafana"
 readme = "README.md"
 requires-python = "==3.10.*"
 
 dependencies = [
+    "torch>=2.2",
+    "pytorch-lightning>=2.2",
+    "torchmetrics>=1.3",
     "segmentation-models-pytorch==0.3.3",
+    "python-multipart>=0.0.9",
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
     "prometheus-client>=0.20.0",
@@ -23,7 +27,6 @@ dependencies = [
     "onnx>=1.19.0",
     "onnxruntime==1.17.3",
     "onnxscript>=0.5.3",
-    
 ]
 
 [project.optional-dependencies]
@@ -67,9 +70,14 @@ url = "https://download.pytorch.org/whl/cpu"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
-override-dependencies = ["perf-analyzer==0"]
+# perf-analyzer (pulled in by tritonclient) ships Linux-only wheels; the client does not need it
+override-dependencies = ["perf-analyzer; sys_platform == 'never'"]
 
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

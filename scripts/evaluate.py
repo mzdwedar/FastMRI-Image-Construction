@@ -1,15 +1,18 @@
 import json
-from datetime import datetime
-import hydra
-from omegaconf import DictConfig, OmegaConf
 import logging
-from torch.utils.data import DataLoader
-from pytorch_lightning import Trainer
+from datetime import datetime
+
+import hydra
 from hydra.utils import to_absolute_path
-from src.data import FastMRITransform, FastMRICustomDataset
+from omegaconf import DictConfig, OmegaConf
+from pytorch_lightning import Trainer
+from torch.utils.data import DataLoader
+
 from scripts import utils
-from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
+from src.data import FastMRICustomDataset, FastMRITransform
+
 from .config import logger
+from .predict import TorchPredictor, get_best_checkpoint, get_best_run_id
 
 
 def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
