@@ -100,8 +100,14 @@ make train       uv run python -m fastmri_knee.train
    exactly, and 0% of a centered phantom lands inside the 320×320 crop (vs 100% with shifts). Remaining step:
    confirm on one real slice, then fix (`PREPROCESS_VERSION = "2"`) and retrain. Infra work proceeds on random-init
    models either way.
-2. **Python 3.12.** Proposal: bump from 3.10 (EOL). Training on Colab adds a hard constraint: `requires-python`
-   must include the Colab runtime's Python (check `!python --version` on Colab). Blocker to verify: `segmentation-models-pytorch==0.3.3` pins
-   `timm==0.9.2`; may need smp ≥ 0.3.4. Checkpoint compatibility must be tested.
+2. **Python version — RESOLVED 2026-11-12 (F1 spike): move to 3.12, keep `segmentation-models-pytorch==0.3.3`.**
+   Evidence (CPU, macOS arm64): a random-init `UnetModel` checkpoint saved under 3.10.21 / torch 2.8.0 loads under
+   3.12.8 / torch 2.15.0 and gives max |diff| = 0.0 on a fixed (2, 1, 320, 320) input; the 15 serving tests pass on
+   both; `fastmri`, `mlflow`, `optuna`, `hydra`, `onnxruntime` import on 3.12. smp 0.3.3 (pinned `timm==0.9.2`)
+   needs no bump. Two undeclared dependencies surfaced on a clean 3.12 env and must be declared in F6:
+   `six` (needed by `pretrainedmodels`, pulled in by smp) and `setuptools<81` (`mlflow==2.12.1` imports
+   `pkg_resources`; goes away if MLflow is upgraded per SPEC-model-packaging req 1).
+   `requires-python` should be `>=3.10,<3.14` so it covers whatever Colab runs. **Not yet verified:** Colab's actual
+   Python version (run `!python --version` there in K2) and ONNX/Triton behaviour on 3.12 (covered by P-phase tests).
 3. Normalization divides by the per-slice max, so absolute intensity is lost in the output. Acceptable for this
    project? (Affects the API response: we return normalized images plus the scale factor as an attribute.)

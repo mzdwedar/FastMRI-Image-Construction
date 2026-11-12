@@ -10,7 +10,7 @@ task that needs them is reached.
 
 ## Phase 1 — Foundation (SPEC-foundation)
 
-- [ ] **F1: Python 3.12 compatibility spike** — S
+- [x] **F1: Python 3.12 compatibility spike** — S
   - Do: In a throwaway env, install the train deps on 3.12 (smp 0.3.3, then 0.3.4+ if needed); save a
     random-init checkpoint under 3.10 and load it under 3.12, one forward pass each; run the serving tests; note
     Colab's current Python version (Q2).
@@ -593,7 +593,7 @@ so the decision isn't lost.
 
 ### Setup (S) — steps that need you, an account, or a machine
 
-- [ ] **S1: Rebuild the local environment**
+- [x] **S1: Rebuild the local environment** (done 2026-11-12 with `uv sync --extra dev --extra cpu`; 15 tests pass on 3.10)
   - Context: `.venv` was broken and is now empty.
   - Do: `uv sync --extra dev` (before F6) / `make setup` (after F6).
   - Trigger: F1 (first task that runs code)

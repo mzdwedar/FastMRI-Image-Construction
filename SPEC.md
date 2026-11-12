@@ -174,6 +174,6 @@ Coverage gate: ≥ 85% line coverage on `gateway/`, `packaging/`, `preprocess.py
 
 1. Preprocessing FFT shift (see SPEC-foundation §Open questions). Fixing it requires retraining; decision blocks
    `gateway` parity tests.
-2. Python 3.10 reached end of life in Oct 2026; proposal is 3.12 (blocked on verifying `segmentation-models-pytorch`).
+2. Python: resolved by the F1 spike, use 3.12 with smp 0.3.3 unchanged (see SPEC-foundation §Open questions 2).
 3. `/evaluate` is removed from the serving API and becomes an offline CLI (it needs ground truth and torchmetrics).
    Confirm.
