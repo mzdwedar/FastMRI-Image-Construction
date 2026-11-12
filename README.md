@@ -211,6 +211,7 @@ Key files:
 │  ├─ prometheus/              # prometheus.yml (scrape jobs, Alertmanager), rules/
 │  ├─ alertmanager/            # alertmanager.yml + render.sh (adds Slack when SLACK_WEBHOOK_URL is set)
 │  ├─ alert-sink/              # local webhook receiver that logs every alert
+│  ├─ loki/ alloy/             # log storage and the Docker-log collector
 │  └─ grafana/                 # Provisioning + dashboards
 ├─ mlruns/                     # MLflow local tracking
 └─ data/                       # train/val/test splits
@@ -314,6 +315,7 @@ Notes:
 - Alert rules live in `monitoring/prometheus/rules/` (`service.yml`, `infra.yml`) with promtool tests in `monitoring/prometheus/tests/`; every alert has a firing and a quiet test case.
 - `make check-configs` validates the Compose file, Prometheus config, rules and rule tests, and both Alertmanager variants (needs Docker).
 - cAdvisor identifies containers by cgroup `id`, not name, under Docker Desktop's containerd image store.
+- Logs: Alloy ships every container's stdout to Loki (:3100), labelled `service` and `level` only. In Grafana Explore: `{service="gateway"} | json | request_id="<id>"` (the id is the `X-Request-ID` response header).
 - Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
 ### Pitfalls

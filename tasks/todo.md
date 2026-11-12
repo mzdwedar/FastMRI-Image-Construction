@@ -380,10 +380,15 @@ task that needs them is reached.
   - Acceptance/Verify: `uv run pytest tests/unit/test_runbooks.py`.
   - Deps: O5 · Files: `docs/runbooks/*.md`, `tests/unit/test_runbooks.py`
 
-- [ ] **O7: Loki and Alloy log pipeline** — S
+- [x] **O7: Loki and Alloy log pipeline** — S
   - Do: Loki + Alloy services (Docker discovery, labels `service`,`level`); Grafana Loki datasource.
   - Acceptance: gateway log lines queryable in Loki by `request_id`.
   - Verify: `make up`; `logcli`/Grafana Explore query.
+  - **Done (2026-11-12):** loki 3.1.1 (7 d retention, compactor) and alloy v1.3.1 with Docker discovery; labels are exactly
+    `service` and `level` (Loki's automatic `service_name` and level detection switched off). Gateway line found by
+    `{service="gateway"} | json | request_id="..."` in Loki and through Grafana's datasource proxy. Loki ~65 MiB, Alloy ~55 MiB
+    idle. `make check-configs` now runs `loki -verify-config` and `alloy fmt` (diff = fail). Alloy mounts `/var/run/docker.sock:ro`
+    (needed for Docker discovery, root-equivalent: flagged in the PR).
   - Deps: O2, O3 · Files: `docker-compose.yml`, `monitoring/alloy/config.alloy`, `monitoring/loki/config.yml`, `monitoring/grafana/provisioning/datasources/*.yml`
 
 - [x] **O9: Spike — Triton OpenTelemetry context propagation** — S
