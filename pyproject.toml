@@ -88,6 +88,7 @@ override-dependencies = ["perf-analyzer; sys_platform == 'never'"]
 
 [tool.ruff]
 line-length = 120
+extend-exclude = ["notebooks"]
 target-version = "py310"  # lowest supported; raise with requires-python
 
 [tool.ruff.lint]
