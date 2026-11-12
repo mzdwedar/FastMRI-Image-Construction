@@ -371,11 +371,17 @@ task that needs them is reached.
     steps never ran; they now run through `sh -c` in the container. Live: `ModelNotReady` fired and reached `alert-sink`.
   - Deps: O1, O3 · Files: `monitoring/prometheus/rules/{service,infra}.yml`, `monitoring/prometheus/tests/{service,infra}_test.yml`
 
-- [ ] **O5: SLO recording rules and burn-rate alerts** — M
+- [x] **O5: SLO recording rules and burn-rate alerts** — M
   - Do: SLI recording rules (5m/30m/1h/6h) for the two latency SLOs (Q12: no availability SLO; `/v1/infer` < 500 ms
     @ 99 %, `/v1/reconstructions` < 5 s @ 95 %); fast/slow burn alerts; promtool tests with synthetic series.
   - Acceptance: burn-rate math verified by tests at 14.4× and 6×.
   - Verify: `make check-configs`.
+  - **Done (2026-11-12):** `slo.yml` records `slo:latency_good_ratio:{5m,30m,1h,6h}` and `slo:latency_burn_rate:*` (one rule
+    per window, both routes in it, so promtool's duplicate-rule lint stays quiet). `LatencySLOBurnFast` (page: 1h and 5m
+    > 14.4) and `LatencySLOBurnSlow` (ticket: 6h and 30m > 6) carry a `route` label. `slo_test.yml` (6 cases) checks exact
+    SLI and burn values (15 on infer, 7 on both routes), fast and slow firing with annotations, and silence at 13 % slow
+    (burn 13) and 5 % slow (burn 5). Live: all 10 rules healthy in Prometheus; burn rate is NaN without traffic. Runbook
+    pages for the two alerts are O6; the dashboard still uses its inline 30 d queries.
   - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
 
 - [ ] **O6: Runbooks** — S
