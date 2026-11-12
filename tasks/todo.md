@@ -147,7 +147,12 @@ task that needs them is reached.
   - Verify: unit test; `make model-random` against Compose MLflow.
   - Deps: P2 · Files: `src/fastmri_knee/packaging/registry.py`, `Makefile`, `tests/unit/packaging/test_register.py`
 
-- [ ] **P4: Triton config templates and renderer** — S
+- [x] **P4: Triton config templates and renderer** — S
+  - Done 2026-11-12: templates `cpu|gpu|nobatch.pbtxt`, `triton_repo.render(profile, version=, threads=, instances=,
+    queue_delay_us=, tensorrt=, fp16=)`. A test proves the default cpu and nobatch renders equal today's configs plus
+    `version_policy specific`. Deviation: `deploy/services/triton/models/` is NOT removed yet. Compose and the benchmark
+    flow still mount it; delete it in T1 together with the Compose switch to `deploy/model_repository` (and drop the
+    legacy-equivalence test and the `export.py` `MODEL_REPO` default then). The gpu template is untested on a GPU (S8).
   - Do: `deploy/triton/templates/{cpu,gpu,nobatch}.pbtxt` from current configs with variables (version, threads,
     instances, queue delay); `packaging/triton_repo.render()`; golden-file tests; remove `deploy/services/triton/models/`.
   - Acceptance: rendered cpu config equals today's `unet_model` config plus `version_policy specific`.

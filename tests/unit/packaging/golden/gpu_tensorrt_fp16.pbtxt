@@ -1,0 +1,42 @@
+# U-Net reconstruction, ONNX Runtime CUDA execution provider, with dynamic batching.
+# Optional TensorRT accelerator (and FP16) via the renderer's tensorrt / fp16 flags.
+name: "unet_model"
+platform: "onnxruntime_onnx"
+max_batch_size: 16
+
+input [
+  {
+    name: "input"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]  # C, H, W (batch dim is implicit)
+  }
+]
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]
+  }
+]
+
+version_policy { specific { versions: [ 3 ] } }
+
+instance_group [ { kind: KIND_GPU, count: 1 } ]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16 ]
+  max_queue_delay_microseconds: 2000  # wait up to this long to fill a batch
+}
+
+optimization {
+  execution_accelerators {
+    gpu_execution_accelerator [ {
+      name: "tensorrt"
+      parameters { key: "precision_mode" value: "FP16" }
+    } ]
+  }
+}
+
+# Host-side ORT threads (pre/post-processing around the GPU kernels)
+parameters { key: "intra_op_thread_count" value: { string_value: "4" } }
+parameters { key: "inter_op_thread_count" value: { string_value: "1" } }
