@@ -368,8 +368,8 @@ task that needs them is reached.
   - Deps: O1, O3 · Files: `monitoring/prometheus/rules/{service,infra}.yml`, `monitoring/prometheus/tests/{service,infra}_test.yml`
 
 - [ ] **O5: SLO recording rules and burn-rate alerts** — M
-  - Do: SLI recording rules (5m/30m/1h/6h) for the three SLOs; fast/slow burn alerts; promtool tests with
-    synthetic series.
+  - Do: SLI recording rules (5m/30m/1h/6h) for the two latency SLOs (Q12: no availability SLO; `/v1/infer` < 500 ms
+    @ 99 %, `/v1/reconstructions` < 5 s @ 95 %); fast/slow burn alerts; promtool tests with synthetic series.
   - Acceptance: burn-rate math verified by tests at 14.4× and 6×.
   - Verify: `make check-configs`.
   - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
@@ -670,10 +670,12 @@ so the decision isn't lost.
   - Recommendation: `alert-sink` default, Slack enabled only when `SLACK_WEBHOOK_URL` is set.
   - Trigger: O3 · Blocks: O3 · Spec: SPEC-observability OQ1
 
-- [ ] **Q12: Calibrate SLO targets**
+- [x] **Q12: Calibrate SLO targets**
   - Context: initial targets (99.5% availability, `/v1/infer` < 250 ms @ 99%, `/v1/reconstructions` < 5 s @ 95%)
     are guesses until the gateway baseline exists. Changing SLOs requires approval.
   - Recommendation: set from G7/C4 measured p95/p99 with ~2× headroom.
+  - **Decided (2026-11-12, owner):** latency SLOs only. `/v1/infer` < 500 ms @ 99 %, `/v1/reconstructions` < 5 s @ 95 %,
+    30 d. Basis: local p99 248 ms for infer; 2.3-2.9 s for a 35-slice volume. Re-check on real hardware.
   - Trigger: O5 · Blocks: O5 · Spec: SPEC-observability §SLOs
 
 - [ ] **Q13: Data-consistency error as the quality proxy with fully sampled input**
