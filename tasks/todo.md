@@ -179,7 +179,15 @@ task that needs them is reached.
   - Verify: `make up`; `docker compose exec triton curl -s -o /dev/null -w '%{http_code}' localhost:8000/v2/health/ready` → 503.
   - Deps: P4, Q7, Q8, S2 · Files: `docker-compose.yml`, `.env.example`, `.gitignore`, `Makefile`
 
-- [ ] **P5: `sync` command** — M
+- [x] **P5: `sync` command** — M
+  - Done 2026-11-12: `python -m fastmri_knee.packaging sync` / `make sync` (`packaging/sync.py`). 7 unit tests: write + rendered
+    config, idempotent (no fs change, no reload), sha mismatch aborts before touching the repo, load failure and ready
+    timeout restore config, version dir and alias, prune keeps current + previous, missing alias. Triton is faked with
+    `httpx.MockTransport` (no `respx` dependency). Live on arm64 with Compose MLflow + Triton: v1 then v2 served, v1
+    unloaded but kept on disk, idempotent re-sync left `config.pbtxt` untouched, inference on v2 returned `[1,1,320,320]`.
+  - Fixed on the way: alias reset now happens before the reload in the failure path (reload can fail too). Test hygiene:
+    `set_registry_uri` leaks via `MLFLOW_REGISTRY_URI` across test modules, so tests set only the tracking URI.
+  - Not covered live: the failure path against a real Triton (only the fake). Sync uses the version-level ready endpoint.
   - Do: resolve `production` alias → version; download + sha256 check; render config; atomic write; prune to
     current + previous; Triton load API; wait ready (60 s); on failure restore previous config, reload, exit 1.
   - Acceptance: unit tests (Triton HTTP mocked with `respx`): idempotent, sha mismatch aborts, load failure restores.

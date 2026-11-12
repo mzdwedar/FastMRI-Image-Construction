@@ -32,6 +32,9 @@ MLFLOW_TRACKING_URI ?= http://localhost:5001
 model-random: ## Register an untrained model (random_init=true) in MLflow; no dataset needed
 	uv run python -m fastmri_knee.packaging register --random-init --tracking-uri $(MLFLOW_TRACKING_URI)
 
+sync: ## Load the production model into Triton (needs `make up-dev`)
+	uv run python -m fastmri_knee.packaging sync --tracking-uri $(MLFLOW_TRACKING_URI)
+
 up: ## Start the Compose stack (MLflow :5001 plus serving)
 	mkdir -p deploy/model_repository
 	docker compose up -d
@@ -53,4 +56,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random up up-dev down data train clean
+.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random sync up up-dev down data train clean
