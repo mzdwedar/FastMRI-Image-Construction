@@ -1,0 +1,88 @@
+# Latency SLOs (SPEC-observability "SLOs", Q12: latency only). SLI = share of requests faster than a histogram bucket
+# edge; burn rate = (1 - SLI) / (1 - target), so 1 spends the 30 d budget exactly over 30 d. A window with no traffic
+# gives NaN, which never fires. Failed requests are not in the latency SLI: outages are the job of GatewayDown & co.
+# Changing a threshold or target needs approval and the matching edit to the burn-rate rules here and the dashboard.
+groups:
+  - name: slo-latency-sli
+    interval: 30s
+    rules:
+      - record: slo:latency_good_ratio:5m
+        expr: |
+          (
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}[5m]))
+            or
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}[5m]))
+          )
+            / sum by (route) (rate(gateway_request_duration_seconds_count{route=~"/v1/infer|/v1/reconstructions"}[5m]))
+      - record: slo:latency_good_ratio:30m
+        expr: |
+          (
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}[30m]))
+            or
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}[30m]))
+          )
+            / sum by (route) (rate(gateway_request_duration_seconds_count{route=~"/v1/infer|/v1/reconstructions"}[30m]))
+      - record: slo:latency_good_ratio:1h
+        expr: |
+          (
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}[1h]))
+            or
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}[1h]))
+          )
+            / sum by (route) (rate(gateway_request_duration_seconds_count{route=~"/v1/infer|/v1/reconstructions"}[1h]))
+      - record: slo:latency_good_ratio:6h
+        expr: |
+          (
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/infer",le="0.5"}[6h]))
+            or
+            sum by (route) (rate(gateway_request_duration_seconds_bucket{route="/v1/reconstructions",le="5.0"}[6h]))
+          )
+            / sum by (route) (rate(gateway_request_duration_seconds_count{route=~"/v1/infer|/v1/reconstructions"}[6h]))
+
+  - name: slo-latency-burn
+    interval: 30s
+    rules:
+      - record: slo:latency_burn_rate:5m
+        expr: |
+          (1 - slo:latency_good_ratio:5m{route="/v1/infer"}) / 0.01
+          or
+          (1 - slo:latency_good_ratio:5m{route="/v1/reconstructions"}) / 0.05
+      - record: slo:latency_burn_rate:30m
+        expr: |
+          (1 - slo:latency_good_ratio:30m{route="/v1/infer"}) / 0.01
+          or
+          (1 - slo:latency_good_ratio:30m{route="/v1/reconstructions"}) / 0.05
+      - record: slo:latency_burn_rate:1h
+        expr: |
+          (1 - slo:latency_good_ratio:1h{route="/v1/infer"}) / 0.01
+          or
+          (1 - slo:latency_good_ratio:1h{route="/v1/reconstructions"}) / 0.05
+      - record: slo:latency_burn_rate:6h
+        expr: |
+          (1 - slo:latency_good_ratio:6h{route="/v1/infer"}) / 0.01
+          or
+          (1 - slo:latency_good_ratio:6h{route="/v1/reconstructions"}) / 0.05
+
+  - name: slo-latency-alerts
+    interval: 30s
+    rules:
+      # Fast: 2% of the monthly budget gone in an hour. Both windows must agree, so a spike that has already ended
+      # does not page. The same threshold serves both routes because burn rate is normalised by each target.
+      - alert: LatencySLOBurnFast
+        expr: |
+          slo:latency_burn_rate:1h > 14.4 and slo:latency_burn_rate:5m > 14.4
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.route }} is burning its latency error budget 14x too fast"
+          description: "Burn rate is {{ $value | printf \"%.1f\" }}x over 1h (and over 5m). At this rate the 30 d budget is gone in about two days."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnFast.md
+
+      # Slow: 5% of the budget gone in six hours; a ticket, not a page.
+      - alert: LatencySLOBurnSlow
+        expr: |
+          slo:latency_burn_rate:6h > 6 and slo:latency_burn_rate:30m > 6
+        labels: {severity: ticket}
+        annotations:
+          summary: "{{ $labels.route }} is steadily burning its latency error budget"
+          description: "Burn rate is {{ $value | printf \"%.1f\" }}x over 6h (and over 30m)."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/LatencySLOBurnSlow.md

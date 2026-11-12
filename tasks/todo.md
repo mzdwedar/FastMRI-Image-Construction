@@ -378,11 +378,17 @@ task that needs them is reached.
     steps never ran; they now run through `sh -c` in the container. Live: `ModelNotReady` fired and reached `alert-sink`.
   - Deps: O1, O3 · Files: `monitoring/prometheus/rules/{service,infra}.yml`, `monitoring/prometheus/tests/{service,infra}_test.yml`
 
-- [ ] **O5: SLO recording rules and burn-rate alerts** — M
-  - Do: SLI recording rules (5m/30m/1h/6h) for the three SLOs; fast/slow burn alerts; promtool tests with
-    synthetic series.
+- [x] **O5: SLO recording rules and burn-rate alerts** — M
+  - Do: SLI recording rules (5m/30m/1h/6h) for the two latency SLOs (Q12: no availability SLO; `/v1/infer` < 500 ms
+    @ 99 %, `/v1/reconstructions` < 5 s @ 95 %); fast/slow burn alerts; promtool tests with synthetic series.
   - Acceptance: burn-rate math verified by tests at 14.4× and 6×.
   - Verify: `make check-configs`.
+  - **Done (2026-11-12):** `slo.yml` records `slo:latency_good_ratio:{5m,30m,1h,6h}` and `slo:latency_burn_rate:*` (one rule
+    per window, both routes in it, so promtool's duplicate-rule lint stays quiet). `LatencySLOBurnFast` (page: 1h and 5m
+    > 14.4) and `LatencySLOBurnSlow` (ticket: 6h and 30m > 6) carry a `route` label. `slo_test.yml` (6 cases) checks exact
+    SLI and burn values (15 on infer, 7 on both routes), fast and slow firing with annotations, and silence at 13 % slow
+    (burn 13) and 5 % slow (burn 5). Live: all 10 rules healthy in Prometheus; burn rate is NaN without traffic. Runbook
+    pages for the two alerts are O6; the dashboard still uses its inline 30 d queries.
   - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
 
 - [ ] **O6: Runbooks** — S
@@ -456,9 +462,15 @@ task that needs them is reached.
     model, then run these).
   - Deps: O4, O8, O10 · Files: `tests/e2e/test_observability.py`, `tests/e2e/conftest.py`
 
-- [ ] **C5: Configs job in CI** — S
+- [x] **C5: Configs job in CI** — S
   - Do: `configs` job: `make check-configs`, dashboards diff, hadolint, actionlint; make it required.
   - Acceptance/Verify: green; drill with a broken alert rule fails it.
+  - **Done (2026-11-12):** `configs` job in `ci.yml` (about 30 s): `make check-configs`, new `make hadolint`, and
+    `make dashboards` + `git diff --exit-code`. actionlint already had its own job. Drills on throwaway PRs #47-#49: a
+    broken alert rule, a stale dashboard and an unpinned `apt-get install` each failed only `configs`. `check-configs`
+    now mounts directories instead of single files (Docker Desktop served stale single-file mounts). `make dashboards`
+    uses plain `python3` (stdlib only), so the job needs no uv. **Not done:** marking `configs` a required check is a
+    GitHub branch-protection setting; I did not change it.
   - Deps: O3, C1 · Files: `.github/workflows/ci.yml`
 
 ### ✅ Checkpoint: Observability — SPEC.md criteria 3, 4 pass in e2e; all alerts have tests + runbooks; human review
@@ -675,10 +687,12 @@ so the decision isn't lost.
   - Recommendation: `alert-sink` default, Slack enabled only when `SLACK_WEBHOOK_URL` is set.
   - Trigger: O3 · Blocks: O3 · Spec: SPEC-observability OQ1
 
-- [ ] **Q12: Calibrate SLO targets**
+- [x] **Q12: Calibrate SLO targets**
   - Context: initial targets (99.5% availability, `/v1/infer` < 250 ms @ 99%, `/v1/reconstructions` < 5 s @ 95%)
     are guesses until the gateway baseline exists. Changing SLOs requires approval.
   - Recommendation: set from G7/C4 measured p95/p99 with ~2× headroom.
+  - **Decided (2026-11-12, owner):** latency SLOs only. `/v1/infer` < 500 ms @ 99 %, `/v1/reconstructions` < 5 s @ 95 %,
+    30 d. Basis: local p99 248 ms for infer; 2.3-2.9 s for a 35-slice volume. Re-check on real hardware.
   - Trigger: O5 · Blocks: O5 · Spec: SPEC-observability §SLOs
 
 - [ ] **Q13: Data-consistency error as the quality proxy with fully sampled input**
