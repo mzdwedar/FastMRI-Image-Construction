@@ -149,7 +149,7 @@ def encode_reconstruction(recon: F32, scale: F32, model_version: str, request_id
 
 
 @router.post(
-    "/reconstructions",
+    "/reconstructionz",
     summary="Reconstruct a k-space volume",
     response_class=Response,
     responses={200: {"content": {HDF5: {}}}},
