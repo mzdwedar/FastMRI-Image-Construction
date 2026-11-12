@@ -116,7 +116,12 @@ task that needs them is reached.
 
 ## Phase 3 — Model packaging + Triton base (SPEC-model-packaging, SPEC-inference-server §1–3)
 
-- [ ] **P1: MLflow tracking/registry service** — S
+- [x] **P1: MLflow tracking/registry service** — S
+  - Done 2026-11-12 (Q6 = latest 2.x + SQLite + volume, per recommendation). MLflow 2.22.4: the newest `ghcr.io/mlflow/mlflow`
+    image tag is v2.22.4, so the client is pinned to match. Server uses `--serve-artifacts`, so the host needs no volume.
+    Verified: `/health` OK; 1-step Lightning run on synthetic data logged metrics and an artifact to :5001. Left as is:
+    the `setuptools<81` pin (pkg_resources still imported); `train.py` builds a local `mlruns/...` path for the results
+    file, which won't exist when artifacts go to the server (revisit when training moves to Colab/K-tasks).
   - Do: `mlflow` service in Compose (pinned, SQLite + artifact volume, host :5001); bump MLflow to current 2.x;
     training uses `MLFLOW_TRACKING_URI` when set (file store fallback kept).
   - Acceptance: `make up` starts MLflow; a 1-step training run on synthetic data logs to it.
@@ -531,7 +536,7 @@ so the decision isn't lost.
   - Recommendation: (a).
   - Trigger: F7 / G4 · Blocks: G4 (response schema) · Spec: SPEC-foundation OQ3
 
-- [ ] **Q6: MLflow version and backend**
+- [x] **Q6: MLflow version and backend**
   - Options: latest 2.x + SQLite (spec default) · 3.x · Postgres backend · MinIO/S3 artifacts.
   - Recommendation: latest 2.x + SQLite + local volume; revisit if multi-user.
   - Trigger: P1 · Blocks: P1 · Spec: SPEC-model-packaging req 1

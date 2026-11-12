@@ -5,7 +5,7 @@
 #   docker compose up -d triton prometheus grafana   # one backend only
 #
 # FastAPI :8000   Triton HTTP :8100 / gRPC :8101 / metrics :8102
-# Prometheus :9090   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
+# MLflow :5001   Prometheus :9090   Grafana :3000 (anonymous viewer; admin login from GF_ADMIN_PASSWORD)
 
 x-cpu-limit: &cpu-limit
   cpus: "${SERVER_CPUS:-4}"   # both backends get the same CPU budget
@@ -46,6 +46,26 @@ services:
       retries: 5
     <<: *cpu-limit
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.22.4
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts   # clients upload over HTTP (--serve-artifacts)
+      - --serve-artifacts
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   prometheus:
     image: prom/prometheus:v2.54.1
     command:
@@ -74,5 +94,6 @@ services:
       - prometheus
 
 volumes:
+  mlflow_data:
   prometheus_data:
   grafana_data:

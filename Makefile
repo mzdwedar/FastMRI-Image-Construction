@@ -27,6 +27,12 @@ test-e2e: ## Tests against the running Compose stack
 
 ci: lint typecheck test ## What CI runs (lint, typecheck, unit tests)
 
+up: ## Start the Compose stack (MLflow :5001 plus serving)
+	docker compose up -d
+
+down: ## Stop the Compose stack
+	docker compose down
+
 data: ## Download/prepare FastMRI data (added by F9)
 	uv run python -m fastmri_knee.data.prepare --root data
 
@@ -37,4 +43,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e data train clean
+.PHONY: help setup lint format typecheck test ci test-integration test-e2e up down data train clean
