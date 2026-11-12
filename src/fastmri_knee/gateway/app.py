@@ -14,7 +14,7 @@ from fastmri_knee.gateway import telemetry
 from fastmri_knee.gateway.auth import key_hashes_for
 from fastmri_knee.gateway.errors import install_handlers, problem_response
 from fastmri_knee.gateway.limits import InflightLimiter
-from fastmri_knee.gateway.logging import configure_logging
+from fastmri_knee.gateway.logging import AccessLogMiddleware, configure_logging
 from fastmri_knee.gateway.readiness import ReadinessMonitor
 from fastmri_knee.gateway.routes import probes, router
 from fastmri_knee.gateway.settings import Settings
@@ -86,6 +86,7 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     app.state.key_hashes = key_hashes_for(settings)  # missing/empty keys file is a startup error
     app.state.limiter = InflightLimiter(settings.max_inflight)
     app.add_middleware(telemetry.MetricsMiddleware)  # inner: sees unhandled errors before RequestIdMiddleware
+    app.add_middleware(AccessLogMiddleware)  # inside RequestIdMiddleware: request_id is bound, 500s are visible
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
     app.include_router(router)

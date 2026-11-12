@@ -93,6 +93,7 @@ async def infer(request: Request) -> Response:
         raise ProblemError(400, "Input contains non-finite values")
     telemetry.UPLOAD_BYTES.observe(len(body))
     telemetry.SLICES.labels("/v1/infer").inc(len(volume))
+    request.state.slices = len(volume)
     out = await run_inference(request, volume)
     with telemetry.stage("encode"):
         payload = await asyncio.to_thread(lambda: np.ascontiguousarray(out, dtype="<f4").tobytes())
@@ -176,6 +177,7 @@ async def reconstructions(
         telemetry.UPLOAD_BYTES.observe(path.stat().st_size)
         kspace = await asyncio.to_thread(read_kspace, path, settings.max_slices)
     telemetry.SLICES.labels("/v1/reconstructions").inc(len(kspace))
+    request.state.slices = len(kspace)
     with telemetry.stage("preprocess"):
         images, scale = await asyncio.to_thread(preprocess_volume, kspace, acceleration)
     recon = await run_inference(request, images)

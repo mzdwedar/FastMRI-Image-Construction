@@ -340,7 +340,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_metrics.py`.
   - Deps: G6 · Files: `src/fastmri_knee/gateway/telemetry.py`, `src/fastmri_knee/gateway/app.py`, `monitoring/monitor_metrics.py`(del), `pyproject.toml`, `tests/unit/gateway/test_metrics.py`
 
-- [ ] **O2: Structured access log** — S
+- [x] **O2: Structured access log** — S
   - Do: one JSON line per request with spec fields; uvicorn access log off; key id hash only.
   - Acceptance: exactly one line per request with matching `request_id`; no key/filename leakage.
   - Verify: `uv run pytest tests/unit/gateway/test_logging.py`.

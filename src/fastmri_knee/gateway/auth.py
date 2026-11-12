@@ -61,6 +61,7 @@ async def require_api_key(request: Request) -> None:
     presented = request.headers.get(HEADER)
     if not presented or not _matches(presented, hashes):
         raise ProblemError(401, "Missing or invalid API key", {"WWW-Authenticate": "ApiKey"})
+    request.state.client = hash_key(presented)[:12]  # key id for the access log; the key itself is never kept
 
 
 def main(argv: list[str]) -> int:
