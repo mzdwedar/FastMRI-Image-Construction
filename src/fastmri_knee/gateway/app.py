@@ -6,10 +6,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from fastmri_knee.gateway import telemetry
 from fastmri_knee.gateway.auth import key_hashes_for
 from fastmri_knee.gateway.errors import install_handlers, problem_response
 from fastmri_knee.gateway.limits import InflightLimiter
@@ -84,6 +85,7 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     app.state.settings = settings
     app.state.key_hashes = key_hashes_for(settings)  # missing/empty keys file is a startup error
     app.state.limiter = InflightLimiter(settings.max_inflight)
+    app.add_middleware(telemetry.MetricsMiddleware)  # inner: sees unhandled errors before RequestIdMiddleware
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
     app.include_router(router)
@@ -93,5 +95,11 @@ def create_app(settings: Settings | None = None, triton: TritonClient | None = N
     async def healthz() -> dict[str, str]:
         """Liveness: the process is up. Never checks dependencies."""
         return {"status": "ok"}
+
+    @app.get(telemetry.METRICS_PATH, include_in_schema=False)
+    async def metrics() -> Response:
+        """Prometheus exposition. Unauthenticated: reach it only over the internal network (SPEC-gateway)."""
+        body, content_type = telemetry.render()
+        return Response(body, media_type=content_type)
 
     return app

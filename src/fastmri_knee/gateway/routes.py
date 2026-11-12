@@ -11,6 +11,7 @@ import structlog
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 
+from fastmri_knee.gateway import telemetry
 from fastmri_knee.gateway.auth import require_api_key
 from fastmri_knee.gateway.errors import ProblemError
 from fastmri_knee.gateway.limits import limit_inflight
@@ -40,16 +41,20 @@ async def run_inference(request: Request, volume: F32) -> F32:
     """Call Triton and translate failures into API errors. Internals are logged, never returned."""
     client: TritonClient = request.app.state.triton
     try:
-        return await infer_volume(client, volume, request.app.state.settings.triton_timeout_s)
+        with telemetry.stage("triton"):
+            return await infer_volume(client, volume, request.app.state.settings.triton_timeout_s)
     except TritonTimeoutError:
+        telemetry.triton_error("DEADLINE_EXCEEDED")
         raise ProblemError(504, "Inference backend timed out") from None
     except TritonError as e:
+        telemetry.triton_error(e.code)
         if e.code == "UNAVAILABLE":
             raise ProblemError(503, "Inference backend unavailable", {"Retry-After": "1"}) from None
         log.error("triton_error", code=e.code)
         raise ProblemError(500, "Internal server error") from None
     except InvalidOutputError as e:
-        log.error("invalid_model_output", reason=str(e))  # TODO(O1): increment the error metric
+        telemetry.triton_error(telemetry.INVALID_OUTPUT)
+        log.error("invalid_model_output", reason=str(e))
         raise ProblemError(500, "Internal server error") from None
 
 
@@ -86,8 +91,11 @@ async def infer(request: Request) -> Response:
     volume = np.frombuffer(body, dtype="<f4").reshape(-1, *SLICE_SHAPE)
     if not np.isfinite(volume).all():
         raise ProblemError(400, "Input contains non-finite values")
+    telemetry.UPLOAD_BYTES.observe(len(body))
+    telemetry.SLICES.labels("/v1/infer").inc(len(volume))
     out = await run_inference(request, volume)
-    payload = await asyncio.to_thread(lambda: np.ascontiguousarray(out, dtype="<f4").tobytes())
+    with telemetry.stage("encode"):
+        payload = await asyncio.to_thread(lambda: np.ascontiguousarray(out, dtype="<f4").tobytes())
     return Response(payload, media_type=OCTET_STREAM)
 
 
@@ -165,11 +173,15 @@ async def reconstructions(
     settings = request.app.state.settings
     with temp_upload(settings.tmp_dir) as path:
         await stream_file_part(request, path, settings.max_upload_mb << 20)
+        telemetry.UPLOAD_BYTES.observe(path.stat().st_size)
         kspace = await asyncio.to_thread(read_kspace, path, settings.max_slices)
-    images, scale = await asyncio.to_thread(preprocess_volume, kspace, acceleration)
+    telemetry.SLICES.labels("/v1/reconstructions").inc(len(kspace))
+    with telemetry.stage("preprocess"):
+        images, scale = await asyncio.to_thread(preprocess_volume, kspace, acceleration)
     recon = await run_inference(request, images)
     version = request.app.state.readiness.model_version or "unknown"
-    body = await asyncio.to_thread(
-        encode_reconstruction, recon, scale, version, getattr(request.state, "request_id", None)
-    )
+    with telemetry.stage("encode"):
+        body = await asyncio.to_thread(
+            encode_reconstruction, recon, scale, version, getattr(request.state, "request_id", None)
+        )
     return Response(body, media_type=HDF5)

@@ -333,7 +333,7 @@ task that needs them is reached.
 
 ## Phase 6 — Observability (SPEC-observability)
 
-- [ ] **O1: Gateway metrics (multiprocess)** — M
+- [x] **O1: Gateway metrics (multiprocess)** — M
   - Do: metrics table from spec in `gateway/telemetry.py`; `PROMETHEUS_MULTIPROC_DIR` on tmpfs; `/metrics`;
     remove `prometheus-fastapi-instrumentator`, delete `monitoring/monitor_metrics.py` (psutil).
   - Acceptance: names/labels match spec exactly; correct counts with 2 workers; no unbounded labels.

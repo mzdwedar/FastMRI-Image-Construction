@@ -7,7 +7,9 @@ from dataclasses import dataclass
 
 import structlog
 
+from fastmri_knee.gateway import telemetry
 from fastmri_knee.gateway.triton_client import ModelState, TritonClient, TritonError
+from fastmri_knee.preprocess import PREPROCESS_VERSION
 
 log = structlog.get_logger()
 
@@ -61,6 +63,7 @@ class ReadinessMonitor:
         ):
             log.info("readiness_changed", ready=new.ready, reason=new.reason, version=new.model and new.model.version)
         self._last = new
+        telemetry.set_model_state(new.ready, new.model.version if new.model else None, PREPROCESS_VERSION)
         return new
 
     async def _run(self) -> None:
