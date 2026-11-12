@@ -3,6 +3,8 @@
 Plan: [plan.md](plan.md). Sizes: XS 1 file · S 1–2 · M 3–5. Every task also meets the Definition of Done:
 `make lint test` green, no regressions, behaviour verified, spec updated if the contract changed.
 Until F6 lands, "make test" means `uv run pytest` with the current config.
+Decisions (`Q`) and human setup steps (`S`) are listed at the [end](#decisions-and-setup) and picked up when the
+task that needs them is reached.
 
 ---
 
@@ -13,7 +15,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     checkpoint from `mlruns/` and run one forward pass; run the serving tests.
   - Acceptance: decision (3.12 / 3.11 / stay) with evidence recorded in SPEC-foundation open question 2.
   - Verify: forward-pass output from the existing checkpoint matches the 3.10 output (`atol=1e-5`).
-  - Deps: none · Files: `SPEC-foundation.md`
+  - Deps: S1, S3 · Files: `SPEC-foundation.md`
 
 - [ ] **F2: Verify FFT shift on a real slice** — S
   - Do: For one file in `data/val`, plot input from current `FastMRITransform` vs shifted variant vs
@@ -28,7 +30,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     with markers `integration`, `e2e`, `training`, `testpaths=["tests"]`; mark data-dependent tests `training`.
   - Acceptance: all three test dirs collected; `-m "not training"` passes without `data/`.
   - Verify: `uv run pytest --collect-only -q`; `uv run pytest -m "not training"`.
-  - Deps: none (ask about `latest_version.txt`) · Files: `pyproject.toml`, `pytest.ini`(del), `tests/data/test_data.py`, `tests/code/test_train.py`, `.gitignore`
+  - Deps: Q3 · Files: `pyproject.toml`, `pytest.ini`(del), `tests/data/test_data.py`, `tests/code/test_train.py`, `.gitignore`
 
 - [ ] **F4: Move library code into `src/fastmri_knee/`** — M (pure refactor)
   - Do: `git mv` `src/{data,model,metrics}.py` → `src/fastmri_knee/{data/__init__.py…}`; update imports in
@@ -50,7 +52,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     regenerate `uv.lock`; Makefile targets from SPEC-foundation; `.env.example`; delete `.venv-cpu/-dev/-gpu` (ask).
   - Acceptance: `rm -rf .venv && make setup` works from the lockfile; `make help` lists targets.
   - Verify: `make setup lint test` on a clean checkout (macOS) and in `python:3.12` Docker (Linux).
-  - Deps: F1, F4 · Files: `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `.env.example`
+  - Deps: F1, F4, Q2, Q4 · Files: `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `.env.example`
 
 - [ ] **F7: numpy preprocessing, shared by training** — M
   - Do: `fastmri_knee/preprocess.py` (`PREPROCESS_VERSION="1"`, exact current semantics incl. normalize-then-crop,
@@ -59,11 +61,11 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
   - Verify: `uv run pytest tests/unit/test_preprocess*.py`.
   - Deps: F4 · Files: `src/fastmri_knee/preprocess.py`, `src/fastmri_knee/data/…`, `tests/unit/test_preprocess.py`, `tests/unit/test_preprocess_no_torch.py`
 
-- [ ] **F8: Fix FFT shift → `PREPROCESS_VERSION="2"`** — S · **GATED on open question 1**
+- [ ] **F8: Fix FFT shift → `PREPROCESS_VERSION="2"`** — S · **GATED on Q1**
   - Do: add `ifftshift`/`fftshift`; phantom test (centre of mass inside crop); update parity test to v2.
   - Acceptance: synthetic phantom 100% inside crop; v1 path deleted (no dual support).
   - Verify: `uv run pytest tests/unit/test_preprocess*.py tests/unit/test_fftshift.py`.
-  - Deps: F2, F7 · Files: `src/fastmri_knee/preprocess.py`, `tests/unit/test_fftshift.py`, `tests/unit/test_preprocess.py`
+  - Deps: F2, F7, Q1 · Files: `src/fastmri_knee/preprocess.py`, `tests/unit/test_fftshift.py`, `tests/unit/test_preprocess.py`
 
 - [ ] **F9: Data acquisition CLI out of the training path** — S
   - Do: move download/extract/split from `FastMRIDataModule.prepare_data` to `fastmri_knee.data.prepare`
@@ -93,12 +95,12 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     `pip-audit` on exported requirements; `actionlint`; SHA-pinned actions; `contents: read`; concurrency group.
   - Acceptance: green on the branch; unit job ≤ 5 min.
   - Verify: push; drill PR with a failing test and a lint error fails the right jobs.
-  - Deps: F6, F10 · Files: `.github/workflows/ci.yml`, `Makefile` (`ci` target)
+  - Deps: F6, F10, S4 · Files: `.github/workflows/ci.yml`, `Makefile` (`ci` target)
 
 - [ ] **C2: Dependency update automation** — XS
   - Do: Dependabot (or Renovate) for actions, Docker, uv; weekly, grouped.
   - Acceptance/Verify: config validates (GitHub UI shows it parsed).
-  - Deps: C1 · Files: `.github/dependabot.yml`
+  - Deps: C1, S7 · Files: `.github/dependabot.yml`
 
 ### ✅ Checkpoint: CI bootstrap — `ci.yml` green; drills fail correctly
 
@@ -111,7 +113,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     training uses `MLFLOW_TRACKING_URI` when set (file store fallback kept).
   - Acceptance: `make up` starts MLflow; a 1-step training run on synthetic data logs to it.
   - Verify: `curl localhost:5001/health`; run appears in UI.
-  - Deps: F6 · Files: `docker-compose.yml`, `.env.example`, `pyproject.toml`/`uv.lock`, `configs/trainer.yaml`
+  - Deps: F6, Q6 · Files: `docker-compose.yml`, `.env.example`, `pyproject.toml`/`uv.lock`, `configs/trainer.yaml`
 
 - [ ] **P2: `register` command with model card** — M
   - Do: `packaging/registry.py`: export → parity (refuse > 1e-4) → `model_card.json` (all spec fields) →
@@ -139,7 +141,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     default profile publishes none.
   - Acceptance: empty repo → live 200, ready 503; arm64 finding + fallback recorded in plan risks.
   - Verify: `make up`; `docker compose exec triton curl -s -o /dev/null -w '%{http_code}' localhost:8000/v2/health/ready` → 503.
-  - Deps: P4 · Files: `docker-compose.yml`, `.env.example`, `.gitignore`, `Makefile`
+  - Deps: P4, Q7, Q8, S2 · Files: `docker-compose.yml`, `.env.example`, `.gitignore`, `Makefile`
 
 - [ ] **P5: `sync` command** — M
   - Do: resolve `production` alias → version; download + sha256 check; render config; atomic write; prune to
@@ -191,7 +193,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
 - [ ] **T5: GPU Compose override** — S
   - Do: `docker-compose.gpu.yml` (nvidia device reservation, `TRITON_PROFILE=gpu`); README manual check section.
   - Acceptance/Verify: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config` validates.
-  - Deps: T1 · Files: `docker-compose.gpu.yml`, `README.md`
+  - Deps: T1 (manual GPU check: S8) · Files: `docker-compose.gpu.yml`, `README.md`
 
 - [ ] **C3: Integration job in CI** — S
   - Do: `e2e.yml` with `integration` job (Docker available, image cache).
@@ -232,22 +234,22 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     success/error/disconnect.
   - Acceptance: 400/413/415/422 cases; 300 MB stream rejected without buffering; temp dir empty after every case.
   - Verify: `uv run pytest tests/unit/gateway/test_reconstructions.py`.
-  - Deps: G2, F7 · Files: `src/fastmri_knee/gateway/{uploads,routes,schemas}.py`, `tests/unit/gateway/test_reconstructions.py`, `tests/fixtures/` helper
+  - Deps: G2, F7, Q5, Q10 · Files: `src/fastmri_knee/gateway/{uploads,routes,schemas}.py`, `tests/unit/gateway/test_reconstructions.py`, `tests/fixtures/` helper
 
 - [ ] **G5: API-key auth and backpressure** — S
   - Do: hashed keys file, constant-time compare, dev-only bypass (startup error otherwise); global semaphore
     `MAX_INFLIGHT` → 503 + `Retry-After: 1`.
   - Acceptance: 401 cases; bypass outside dev fails startup; saturation returns 503 immediately.
   - Verify: `uv run pytest tests/unit/gateway/test_auth.py tests/unit/gateway/test_backpressure.py`.
-  - Deps: G4 · Files: `src/fastmri_knee/gateway/{auth,limits}.py`, `tests/unit/gateway/test_auth.py`, `tests/unit/gateway/test_backpressure.py`
+  - Deps: G4, S6 · Files: `src/fastmri_knee/gateway/{auth,limits}.py`, `tests/unit/gateway/test_auth.py`, `tests/unit/gateway/test_backpressure.py`
 
-- [ ] **G6: Gateway image and Compose wiring; remove old backend** — M · needs open question 3
+- [ ] **G6: Gateway image and Compose wiring; remove old backend** — M · needs Q9
   - Do: `deploy/gateway/Dockerfile` (multi-stage uv, 3.12-slim, uid 10001, labels), gunicorn+uvicorn workers,
     Compose service (read-only rootfs, tmpfs `/tmp`, secrets file, healthcheck); delete
     `deploy/services/fastapi/`, `tests/serving/test_api.py`, `monitoring/monitor_metrics.py` usage by old app.
   - Acceptance: `make up` → gateway healthy; `curl /v1/reconstructions` works through Triton.
   - Verify: `make up && curl …` with synthetic h5; `docker compose ps` all healthy.
-  - Deps: G5 · Files: `deploy/gateway/Dockerfile`, `docker-compose.yml`, `.env.example`, `deploy/services/fastapi/*`(del), `tests/serving/test_api.py`(del)
+  - Deps: G5, Q9, S6 · Files: `deploy/gateway/Dockerfile`, `docker-compose.yml`, `.env.example`, `deploy/services/fastapi/*`(del), `tests/serving/test_api.py`(del)
 
 - [ ] **G7: Gateway integration, contract, and image tests** — M
   - Do: integration: reconstruction equals local ORT on same input (`atol=1e-5`), `/readyz` flips when Triton
@@ -287,12 +289,12 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
   - Verify: `uv run pytest tests/unit/gateway/test_logging.py`.
   - Deps: O1 · Files: `src/fastmri_knee/gateway/logging.py`, `tests/unit/gateway/test_logging.py`
 
-- [ ] **O3: Alertmanager, alert-sink, node-exporter, cAdvisor; config checks** — M · needs open question 5
+- [ ] **O3: Alertmanager, alert-sink, node-exporter, cAdvisor; config checks** — M · needs Q11
   - Do: Compose services (pinned); Prometheus scrape jobs + `rule_files`; `alertmanager.yml` (sink default,
     Slack when env set); `make check-configs` (promtool, amtool, `docker compose config`).
   - Acceptance: all targets `up` in Prometheus; `make check-configs` passes.
   - Verify: `make up check-configs`; Prometheus `/targets`.
-  - Deps: G6 · Files: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`, `monitoring/alertmanager/alertmanager.yml`, `monitoring/alert-sink/` , `Makefile`
+  - Deps: G6, Q11, S2 (S5 if Slack) · Files: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`, `monitoring/alertmanager/alertmanager.yml`, `monitoring/alert-sink/` , `Makefile`
 
 - [ ] **O4: Symptom and infra alerts with rule tests** — M
   - Do: rules for GatewayDown, TritonDown, ModelNotReady, TritonQueueSaturation, GatewayRejectingLoad,
@@ -305,7 +307,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     synthetic series.
   - Acceptance: burn-rate math verified by tests at 14.4× and 6×.
   - Verify: `make check-configs`.
-  - Deps: O4 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
+  - Deps: O4, Q12 · Files: `monitoring/prometheus/rules/slo.yml`, `monitoring/prometheus/tests/slo_test.yml`
 
 - [ ] **O6: Runbooks** — S
   - Do: `docs/runbooks/<Alert>.md` for every alert (symptoms, dashboards, causes, commands); `runbook_url` annotation
@@ -363,7 +365,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     performance test (≤ 2% of a 35-slice request).
   - Acceptance: DC error ≈ 0 for perfect reconstruction, monotonic with noise.
   - Verify: `uv run pytest tests/unit/gateway/test_stats.py`.
-  - Deps: O1, F7 · Files: `src/fastmri_knee/gateway/stats.py`, `tests/unit/gateway/test_stats.py`
+  - Deps: O1, F7, Q13 · Files: `src/fastmri_knee/gateway/stats.py`, `tests/unit/gateway/test_stats.py`
 
 - [ ] **M2: Stats metrics in the request path** — S
   - Do: histograms `model_input_stat`, `model_output_stat`, `model_data_consistency_error`, shape-other counter;
@@ -404,12 +406,12 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
 
 ## Phase 8 — Release and hardening (SPEC-ci-cd, docs)
 
-- [ ] **C6: `release.yml`** — M · needs open question 4
+- [ ] **C6: `release.yml`** — M · needs Q14
   - Do: on tag `v*.*.*`: build amd64 gateway image, trivy (fail CRITICAL/HIGH with fix), syft SBOM to release,
     push `ghcr.io/<owner>/fastmri-gateway:{version,sha}`, git-cliff changelog; `packages: write` only here.
   - Acceptance: `v0.2.0-rc1` tag publishes; `GATEWAY_IMAGE=ghcr.io/…:0.2.0-rc1 make up` runs it.
   - Verify: tag on the branch; pull and run.
-  - Deps: G6, C4 · Files: `.github/workflows/release.yml`, `cliff.toml`, `.env.example`
+  - Deps: G6, C4, Q14, S9 · Files: `.github/workflows/release.yml`, `cliff.toml`, `.env.example`
 
 - [ ] **C7: `bench.yml` nightly (advisory)** — S
   - Do: nightly + manual; runs `make bench bench-compare`; job summary; fails only on > 30% regression.
@@ -421,7 +423,7 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
     record results; `docs/contributing.md` with branch protection settings and required checks.
   - Acceptance: every drill fails the expected job.
   - Verify: links to drill runs in the PR.
-  - Deps: C1–C6 · Files: `docs/contributing.md`
+  - Deps: C1–C6, S10 · Files: `docs/contributing.md`
 
 - [ ] **D1: README rewrite** — S
   - Do: architecture diagram (target), quickstart (`make setup model-random up`), operations (promote/rollback,
@@ -439,4 +441,143 @@ Until F6 lands, "make test" means `uv run pytest` with the current config.
 
 ## Gated (outside infra scope)
 
-- [ ] **R1: Retrain on preprocessing v2** — user, GPU · Deps: F8 · then `make register RUN_ID=… && make promote VERSION=n ALIAS=production`
+- [ ] **R1: Retrain on preprocessing v2** — user, GPU · Deps: F8, Q1, S8 · then `make register RUN_ID=… && make promote VERSION=n ALIAS=production`
+
+---
+
+## Decisions and setup
+
+Tackle each item when its **trigger** task is reached. Record the outcome inline (`→ Decided YYYY-MM-DD: …`) and
+in the referenced spec, then check it off. Items marked *deferred* are out of scope for this pass; they are kept
+so the decision isn't lost.
+
+### Decisions (Q)
+
+- [ ] **Q1: Fix the FFT shift and retrain?**
+  - Context: confirmed on a synthetic phantom; `|ifft2(k)|` is the correct image shifted by half a frame, so the
+    crop misses the anatomy. Every existing model was trained on misaligned inputs.
+  - Options: (a) fix → `PREPROCESS_VERSION="2"`, retrain (R1); (b) keep v1.
+  - Recommendation: (a). Evidence: F2 figure + NCC numbers.
+  - Trigger: after F2 · Blocks: F8, R1 · Spec: SPEC-foundation OQ1
+
+- [ ] **Q2: Python version**
+  - Context: 3.10 reached end of life in Oct 2026. Risk: `segmentation-models-pytorch==0.3.3` / `timm==0.9.2` on 3.12.
+  - Options: 3.12 · 3.11 · stay on 3.10.
+  - Recommendation: 3.12 if F1 passes, else 3.11. Evidence: F1 results.
+  - Trigger: after F1 · Blocks: F6 · Spec: SPEC-foundation OQ2
+
+- [ ] **Q3: Delete `latest_version.txt`?**
+  - Context: untracked, contents `10.30.0,2025-09-01T16:14:47Z`, no references in code.
+  - Recommendation: delete unless you know what writes it.
+  - Trigger: F3 · Blocks: F3 (only that file)
+
+- [ ] **Q4: Delete the extra venvs `.venv-cpu`, `.venv-dev`, `.venv-gpu`?**
+  - Context: replaced by one `.venv` with extras; `.venv-dev` already points to a missing interpreter.
+  - Recommendation: delete.
+  - Trigger: F6 · Blocks: F6 (cleanup step only)
+
+- [ ] **Q5: Per-slice max normalization and the response format**
+  - Context: preprocessing divides each slice by its max, so outputs are on a relative [0, 1] scale.
+  - Options: (a) keep, return `scale` attribute so clients can restore intensity; (b) change normalization (retrain).
+  - Recommendation: (a).
+  - Trigger: F7 / G4 · Blocks: G4 (response schema) · Spec: SPEC-foundation OQ3
+
+- [ ] **Q6: MLflow version and backend**
+  - Options: latest 2.x + SQLite (spec default) · 3.x · Postgres backend · MinIO/S3 artifacts.
+  - Recommendation: latest 2.x + SQLite + local volume; revisit if multi-user.
+  - Trigger: P1 · Blocks: P1 · Spec: SPEC-model-packaging req 1
+
+- [ ] **Q7: Triton model control mode**
+  - Options: `explicit` (sync calls the load API; failures visible) · `poll` (Triton watches the repo).
+  - Recommendation: `explicit`.
+  - Trigger: T1 · Blocks: T1, P5 · Spec: SPEC-model-packaging OQ2
+
+- [ ] **Q8: Triton image version**
+  - Context: pinned to `24.08-py3`; also must confirm an arm64 build exists (T1 spike).
+  - Options: stay on 24.08 · move to a current 2026 release (revalidate ORT parity).
+  - Recommendation: current release if it has arm64 and passes T3; decide with T1 evidence.
+  - Trigger: T1 · Blocks: T1 · Spec: SPEC-inference-server req 6
+
+- [ ] **Q9: Drop `/evaluate` (and `/predict`) from the serving API?**
+  - Context: needs ground truth and torchmetrics; the gateway is torch-free. Becomes offline `make evaluate`.
+  - Recommendation: drop.
+  - Trigger: G6 · Blocks: G6 · Spec: SPEC.md OQ3
+
+- [ ] **Q10: Keep the `acceleration` demo parameter on `/v1/reconstructions`?**
+  - Context: lets fully sampled files simulate undersampled scanner input.
+  - Recommendation: keep, documented as a demo feature.
+  - Trigger: G4 · Blocks: G4 · Spec: SPEC-gateway OQ2
+
+- [ ] **Q11: Alertmanager receivers**
+  - Options: local `alert-sink` only (used by e2e) · plus Slack (needs S5) · plus email (needs SMTP).
+  - Recommendation: `alert-sink` default, Slack enabled only when `SLACK_WEBHOOK_URL` is set.
+  - Trigger: O3 · Blocks: O3 · Spec: SPEC-observability OQ1
+
+- [ ] **Q12: Calibrate SLO targets**
+  - Context: initial targets (99.5% availability, `/v1/infer` < 250 ms @ 99%, `/v1/reconstructions` < 5 s @ 95%)
+    are guesses until the gateway baseline exists. Changing SLOs requires approval.
+  - Recommendation: set from G7/C4 measured p95/p99 with ~2× headroom.
+  - Trigger: O5 · Blocks: O5 · Spec: SPEC-observability §SLOs
+
+- [ ] **Q13: Data-consistency error as the quality proxy with fully sampled input**
+  - Context: with no mask, it measures fidelity to the input rather than undersampled consistency.
+  - Recommendation: accept, label clearly on the dashboard.
+  - Trigger: M1 · Blocks: M1 · Spec: SPEC-model-monitoring OQ1
+
+- [ ] **Q14: GHCR image visibility**
+  - Options: public · private (pulls need a token).
+  - Trigger: C6 · Blocks: C6 · Spec: SPEC-ci-cd OQ1
+
+- [ ] **Q15: Serve `staging` side by side (shadow/canary)?** — *deferred*
+  - Recommendation: not this pass; revisit after Phase 7. Spec: SPEC-model-packaging OQ1
+
+- [ ] **Q16: Async job API for large volumes?** — *deferred*
+  - Recommendation: only if `/v1/reconstructions` p95 > 10 s. Spec: SPEC-gateway OQ1
+
+### Setup (S) — steps that need you, an account, or a machine
+
+- [ ] **S1: Rebuild the local environment**
+  - Context: `.venv` was broken and is now empty.
+  - Do: `uv sync --extra dev` (before F6) / `make setup` (after F6).
+  - Trigger: F1 (first task that runs code)
+
+- [ ] **S2: Docker resources for the full stack**
+  - Context: Docker Desktop has 8 GB RAM / 11 CPUs. Triton (4 GB limit) + gateway + MLflow + 8 observability
+    services will be tight.
+  - Do: raise Docker Desktop memory to ≥ 12 GB, or accept an observability Compose profile that is off by default.
+  - Trigger: T1 (tight), O3 (required)
+
+- [ ] **S3: A trained checkpoint for compatibility checks**
+  - Context: no `.ckpt` exists under `mlruns/` or `mlflow_artifacts/`; F1 can't test loading an old checkpoint.
+  - Do: provide one (path or MLflow run), or accept F1 testing with a freshly trained 1-epoch checkpoint on `data/`.
+  - Trigger: F1
+
+- [ ] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
+  - Do: confirm Actions enabled; `git push -u origin refactor/prod-infra` (I'll ask before pushing).
+  - Trigger: C1 · Blocks: C1, C3, C4, C5, C7
+
+- [ ] **S5: Slack webhook (optional)**
+  - Do: create an incoming webhook; store as `SLACK_WEBHOOK_URL` in local `.env` and as a repo secret if CI should use it.
+  - Trigger: O3 (only if Q11 includes Slack)
+
+- [ ] **S6: Secrets for local and prod runs**
+  - Do: `make api-key` (added in G5) generates a key and appends its hash to `secrets/api_keys`; set
+    `GF_ADMIN_PASSWORD` in `.env`. `secrets/` and `.env` are gitignored.
+  - Trigger: G5 / G6
+
+- [ ] **S7: Dependency bot choice**
+  - Options: Dependabot (no install) · Renovate (install the GitHub app).
+  - Recommendation: Dependabot.
+  - Trigger: C2
+
+- [ ] **S8: GPU machine (manual checks only)**
+  - Do: access to an NVIDIA GPU host with Docker + NVIDIA Container Toolkit for the T5 manual check and R1 retrain.
+  - Trigger: T5 (manual check can be deferred), R1
+
+- [ ] **S9: GHCR publishing permissions**
+  - Do: allow workflows to write packages (repo Settings → Actions → Workflow permissions), set package visibility per Q14.
+  - Trigger: C6
+
+- [ ] **S10: Branch protection on `main`**
+  - Do: require PRs, linear history, and the required checks listed in SPEC-ci-cd (GitHub Settings → Branches).
+  - Trigger: C8

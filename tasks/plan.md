@@ -78,9 +78,7 @@ G6 → C6;  C1..C6 → C8;  all → D1
 
 ## Open questions (block the tasks noted)
 
-1. FFT-shift fix + retrain: approve after F2 evidence? → blocks F8, R1.
-2. Python 3.12 bump? → decided by F1 evidence; blocks F6.
-3. Drop `/evaluate` from the serving API (becomes offline CLI)? → blocks G6 (removal of old service).
-4. Repo on GitHub with Actions; public GHCR images? → blocks C1 (running), C6.
-5. Alertmanager default receiver: local `alert-sink` only? → O3.
-6. Should `latest_version.txt` be deleted? → F3.
+All open questions and human setup steps are tracked as tasks in
+[todo.md § Decisions and setup](todo.md#decisions-and-setup): decisions `Q1–Q16`, setup `S1–S10`. Each lists its
+trigger (the task that needs it) and is tackled when that task is reached, not up front. A task that lists a `Q`/`S`
+dependency must not start until that item is checked off.
