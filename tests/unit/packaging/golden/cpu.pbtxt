@@ -1,6 +1,6 @@
-# U-Net reconstruction, ONNX Runtime on CPU, with server-side dynamic batching.
-# One request = one or more 320x320 magnitude slices; Triton merges concurrent
-# requests into a single forward pass of up to max_batch_size slices.
+# U-Net reconstruction, ONNX Runtime on CPU. Dynamic batching is on for its queue policy (load shedding), but with
+# no delay and no preferred sizes: a request never waits to fill a batch (T4: waiting bought nothing on 4 CPUs).
+# One request = one or more 320x320 magnitude slices.
 name: "unet_model"
 platform: "onnxruntime_onnx"
 max_batch_size: 16
@@ -25,8 +25,7 @@ version_policy { specific { versions: [ 3 ] } }
 instance_group [ { kind: KIND_CPU, count: 1 } ]
 
 dynamic_batching {
-  preferred_batch_size: [ 4, 8, 16 ]
-  max_queue_delay_microseconds: 2000  # wait up to this long to fill a batch
+  max_queue_delay_microseconds: 0  # 0 on CPU: run as soon as an instance is free
   # Backpressure: shed load instead of queueing without bound (clients see UNAVAILABLE -> gateway 503)
   default_queue_policy {
     timeout_action: REJECT

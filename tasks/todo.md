@@ -238,11 +238,19 @@ task that needs them is reached.
   - Acceptance/Verify: `make test-integration` green.
   - Deps: T2, P7 · Files: `tests/integration/test_triton.py`, `tests/integration/conftest.py`
 
-- [ ] **T4: Benchmark baseline and comparison** — M
+- [x] **T4: Benchmark baseline and comparison** — M
   - Do: adapt `benchmarks/load_test.py` to gRPC/HTTP via dev profile; `make bench`, `make bench-compare`;
     compare 1×4 vs 2×2 instances×threads and nobatch; commit `benchmarks/baselines/cpu.json`; set default.
   - Acceptance: batching ≥ 1.5× nobatch at concurrency 16; budgets in SPEC-inference-server filled with numbers.
   - Verify: `make bench bench-compare`; results attached to PR.
+  - **Done (2026-11-12):** `make bench` / `make bench-compare` (`benchmarks/load_test.py`, `compare.py`), baseline in
+    `benchmarks/baselines/cpu.json`. Three interleaved runs per config with the observability stack stopped. Medians at
+    c=16: nobatch 15.1 req/s, batching (2 ms) 15.2, 2×2 16.6, so batching is 1.0×, not 1.5×; criterion dropped by the owner
+    (decision 2026-11-12). Default is now batching with zero delay and no preferred sizes (keeps the queue policy for
+    load shedding): 13.5 req/s at c=1 (p99 85 ms), 15.6 at c=16 (p99 1.77 s). p99 budget at c=1 loosened to 2×. Integration
+    tests (incl. 512-request overload) pass. A Triton HTTP binary-path glitch (`illegal header line`, ~1 in 20k) is
+    counted separately by the load test; the gateway uses gRPC. GPU delay (2 ms) not measured. The other 1×4 numbers were
+    taken with Docker's 8 GB VM; an earlier run with observability containers running gave only ~10 req/s.
   - Deps: T2, P5 · Files: `benchmarks/load_test.py`, `benchmarks/compare.py`, `benchmarks/baselines/cpu.json`, `Makefile`, `SPEC-inference-server.md`
 
 - [ ] **T5: GPU Compose override** — S

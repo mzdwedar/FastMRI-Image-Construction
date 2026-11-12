@@ -1,5 +1,5 @@
 {
-  "model": "unet_model_nobatch",
+  "model": "unet_model",
   "payload": {
     "slices_per_request": 1,
     "shape": [
@@ -18,87 +18,93 @@
     "machine": "arm64",
     "system": "Darwin"
   },
-  "started": "2026-11-12T18:20:38+0100",
+  "started": "2026-11-12T18:52:16+0100",
   "steps": [
     {
       "concurrency": 1,
-      "requests": 399,
+      "requests": 405,
       "errors": 0,
-      "throughput_rps": 13.3,
+      "throughput_rps": 13.5,
       "latency_ms": {
-        "mean": 75.2,
-        "p50": 74.5,
-        "p90": 77.9,
-        "p95": 80.6,
-        "p99": 106.6
-      }
+        "mean": 74.2,
+        "p50": 73.9,
+        "p90": 76.2,
+        "p95": 77.6,
+        "p99": 85.2
+      },
+      "http_framing_glitches": 0
     },
     {
       "concurrency": 2,
-      "requests": 446,
+      "requests": 466,
       "errors": 0,
-      "throughput_rps": 14.87,
+      "throughput_rps": 15.53,
       "latency_ms": {
-        "mean": 134.9,
-        "p50": 130.6,
-        "p90": 144.3,
-        "p95": 158.0,
-        "p99": 230.3
-      }
+        "mean": 128.6,
+        "p50": 127.6,
+        "p90": 133.0,
+        "p95": 135.9,
+        "p99": 145.2
+      },
+      "http_framing_glitches": 0
     },
     {
       "concurrency": 4,
-      "requests": 448,
+      "requests": 466,
       "errors": 0,
-      "throughput_rps": 14.93,
+      "throughput_rps": 15.53,
       "latency_ms": {
-        "mean": 268.0,
-        "p50": 258.0,
-        "p90": 293.7,
-        "p95": 315.3,
-        "p99": 349.7
-      }
+        "mean": 257.0,
+        "p50": 205.4,
+        "p90": 363.0,
+        "p95": 367.0,
+        "p99": 378.4
+      },
+      "http_framing_glitches": 0
     },
     {
       "concurrency": 8,
-      "requests": 448,
+      "requests": 466,
       "errors": 0,
-      "throughput_rps": 14.93,
+      "throughput_rps": 15.53,
       "latency_ms": {
-        "mean": 533.4,
-        "p50": 511.4,
-        "p90": 573.6,
-        "p95": 591.5,
-        "p99": 618.5
-      }
+        "mean": 517.6,
+        "p50": 462.3,
+        "p90": 819.8,
+        "p95": 826.7,
+        "p99": 870.5
+      },
+      "http_framing_glitches": 2
     },
     {
       "concurrency": 16,
-      "requests": 453,
+      "requests": 467,
       "errors": 0,
-      "throughput_rps": 15.1,
+      "throughput_rps": 15.57,
       "latency_ms": {
-        "mean": 1059.9,
-        "p50": 1045.9,
-        "p90": 1128.0,
-        "p95": 1141.0,
-        "p99": 1242.2
-      }
+        "mean": 1028.4,
+        "p50": 974.3,
+        "p90": 1014.2,
+        "p95": 1744.8,
+        "p99": 1765.6
+      },
+      "http_framing_glitches": 0
     },
     {
       "concurrency": 32,
-      "requests": 469,
+      "requests": 464,
       "errors": 0,
-      "throughput_rps": 15.63,
+      "throughput_rps": 15.47,
       "latency_ms": {
-        "mean": 2049.7,
-        "p50": 2046.9,
-        "p90": 2068.2,
-        "p95": 2071.9,
-        "p99": 2080.0
-      }
+        "mean": 2058.7,
+        "p50": 2053.9,
+        "p90": 2082.2,
+        "p95": 2090.9,
+        "p99": 2093.6
+      },
+      "http_framing_glitches": 0
     }
   ],
-  "note": "median of 3 runs, 2026-11-12; Docker Desktop 8 GB / 11 CPUs, Triton limited to 4 CPUs, random-init U-Net, profile nobatch, 1 instance x 4 ORT threads, observability containers stopped; served as unet_model_nobatch",
+  "note": "median of 3 runs, 2026-11-12; Docker Desktop 8 GB / 11 CPUs, Triton limited to 4 CPUs, random-init U-Net, profile cpu = dynamic batching with max_queue_delay 0 and no preferred sizes (queue policy kept for load shedding), 1 instance x 4 ORT threads, observability containers stopped. Plain nobatch measured 15.1 req/s at c=16 (p99 1.24 s), 2 instances x 2 threads 16.6 (p99 1.56 s), 8 ms-class batching delay 15.2 (p99 1.82 s)",
   "runs": 3
 }

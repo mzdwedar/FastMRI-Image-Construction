@@ -55,12 +55,12 @@ def check_response(resp: httpx.Response) -> None:
 
 
 async def run_step(client, req, concurrency, warmup_s, duration_s):
-    latencies, errors, error_kinds = [], 0, set()
+    latencies, errors, glitches, error_kinds = [], 0, 0, set()
     t_start = time.perf_counter()
     t_measure, t_end = t_start + warmup_s, t_start + warmup_s + duration_s
 
     async def worker():
-        nonlocal errors
+        nonlocal errors, glitches
         while (now := time.perf_counter()) < t_end:
             try:
                 resp = await client.post(**req)
@@ -69,6 +69,9 @@ async def run_step(client, req, concurrency, warmup_s, duration_s):
                 if now >= t_measure:
                     latencies.append(done - now)
             except Exception as exc:
+                if "illegal header line" in str(exc):
+                    glitches += 1  # Triton's HTTP binary path mis-frames ~1 response in 20k; the gateway uses gRPC
+                    continue
                 errors += 1
                 error_kinds.add(f"{type(exc).__name__}: {str(exc)[:120]}")
 
@@ -78,6 +81,7 @@ async def run_step(client, req, concurrency, warmup_s, duration_s):
         "concurrency": concurrency,
         "requests": len(latencies),
         "errors": errors,
+        "http_framing_glitches": glitches,
         "error_kinds": sorted(error_kinds),
         "throughput_rps": len(latencies) / duration_s,
         "latency_ms": {

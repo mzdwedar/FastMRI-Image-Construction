@@ -5,6 +5,8 @@ from string import Template
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "deploy" / "triton" / "templates"
 PROFILES = ("cpu", "gpu", "nobatch")
+# T4: batching delay bought nothing on CPU, so the CPU profile never waits; the GPU profile keeps 2 ms.
+DEFAULT_QUEUE_DELAY_US = {"cpu": 0, "gpu": 2000, "nobatch": 0}
 MODEL_NAMES = {"cpu": "unet_model", "gpu": "unet_model", "nobatch": "unet_model_nobatch"}
 
 _TENSORRT = """
@@ -25,7 +27,7 @@ def render(
     version: int,
     threads: int = 4,
     instances: int = 1,
-    queue_delay_us: int = 2000,
+    queue_delay_us: int | None = None,
     tensorrt: bool = False,
     fp16: bool = False,
 ) -> str:
@@ -45,7 +47,7 @@ def render(
         "model_name": MODEL_NAMES[profile],
         "version": int(version),
         "instances": int(instances),
-        "queue_delay_us": int(queue_delay_us),
+        "queue_delay_us": int(DEFAULT_QUEUE_DELAY_US[profile] if queue_delay_us is None else queue_delay_us),
         "intra_threads": int(threads),
         "inter_threads": 1,
         "optimization": optimization,

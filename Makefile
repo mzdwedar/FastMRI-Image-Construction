@@ -122,7 +122,7 @@ MODEL ?= unet_model
 bench: ## Load-test Triton directly (needs `make up-dev` + `make sync`): make bench NAME=cpu MODEL=unet_model [ARGS="--duration 10"]
 	uv run python -m benchmarks.load_test --model $(MODEL) --out benchmarks/results/$(NAME).json $(ARGS)
 
-bench-compare: ## Check benchmarks/results/cpu.json against benchmarks/baselines/cpu.json (add ARGS=--nobatch path)
+bench-compare: ## Check benchmarks/results/cpu.json against benchmarks/baselines/cpu.json
 	uv run python -m benchmarks.compare $(ARGS)
 
 down: ## Stop the Compose stack
