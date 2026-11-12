@@ -12,7 +12,7 @@ The kernel is remote: it cannot see local files or uncommitted changes. The note
 2. Put the data on Drive as `MyDrive/fastmri/{train,val}/*.h5` (singlecoil knee).
 3. Open `notebooks/train_colab.ipynb`, pick a GPU kernel, set the parameter cell (`GIT_SHA`, `RUN_NAME`, ...), run all cells.
 4. Results are in `MyDrive/fastmri/runs/<RUN_NAME>/`:
-   - `checkpoints/UnetModel-ep*.ckpt` (best by PSNR), `checkpoints/last.ckpt`, `checkpoints/run_summary.json`
+   - `checkpoints/best.ckpt` (best by PSNR), `checkpoints/last.ckpt`, `checkpoints/run_summary.json`
    - `mlruns/` (MLflow file store: curves, open it with `mlflow ui --backend-store-uri <that folder>` after downloading)
    - `train_results.json`
 5. Download the run folder and register it locally (K3): `make register CKPT=<checkpoint> SUMMARY=<run_summary.json>`.

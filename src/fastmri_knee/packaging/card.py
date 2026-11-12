@@ -1,6 +1,7 @@
 """Model card: the provenance record stored next to every registered model version."""
 
 import hashlib
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,10 @@ def sha256_file(path: Path) -> str:
 
 
 def git_sha() -> str:
+    # Colab installs from a pinned commit, so there is no .git to ask: the notebook passes GIT_SHA
+    pinned = os.environ.get("GIT_SHA", "").strip()
+    if pinned:
+        return pinned
     try:
         out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
     except (OSError, subprocess.CalledProcessError):

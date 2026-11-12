@@ -59,7 +59,7 @@ trainer:
 
   checkpoint:
     path: ${oc.env:checkpoint_dir, ./mlflow_artifacts/checkpoints}
-    filename: UnetModel-ep{epoch:02d}
+    filename: best  # top_k=1 overwrites in place, so the best checkpoint is always best.ckpt
     n_epochs: 1
     top_k: 1
     monitor: psnr

@@ -53,6 +53,7 @@ def test_summary_written_then_rerun_resumes(workspace):
 
     ckpt_dir = workspace / "ckpt"
     summary = json.loads((ckpt_dir / "run_summary.json").read_text())
+    assert summary["checkpoint"] == "best.ckpt"
     best = ckpt_dir / summary["checkpoint"]
     assert summary["checkpoint_sha256"] == sha256_file(best)
     assert summary["preprocess_version"] == PREPROCESS_VERSION
@@ -70,6 +71,8 @@ def test_summary_written_then_rerun_resumes(workspace):
     resumed = json.loads((ckpt_dir / "run_summary.json").read_text())
     assert resumed["resumed_from"] == str(ckpt_dir / "last.ckpt")
     assert resumed["global_step"] == 4  # continued from step 2, did not restart at 0
+    assert resumed["checkpoint"] == "best.ckpt"  # the rerun overwrote best in place, no best-v1.ckpt
+    assert not (ckpt_dir / "best-v1.ckpt").exists()
 
 
 def test_num_samples_limits_the_slices_used(workspace):
