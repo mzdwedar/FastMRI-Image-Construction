@@ -22,13 +22,13 @@ export EXPERIMENT_NAME="fastmri"
 export TRAIN_RESULTS_FILE=results/training_results.json
 export max_epochs=10
 export batch_size=16
-python scripts/train.py
+python -m fastmri_knee.train
 
 # # Get and save run ID
 echo "Step3: getting run ID..."
 eval $(python -c "
         import os
-        from src import utils
+        from fastmri_knee import utils
         d = utils.load_dict(os.getenv('TRAIN_RESULTS_FILE'))
         print(f'export RUN_ID={d[\"run_id\"]}')
         print(f'export EXPERIMENT_ID={d[\"experiment_id\"]}')
@@ -42,7 +42,7 @@ echo "Step4: Evaluating model..."
 export EVAL_RESULTS_FILE=results/evaluation_results.json
 export eval_data_path="data/val"
 export run_id=$RUN_ID
-python scripts/evaluate.py
+python -m fastmri_knee.evaluate
 
 # TODO: Test model
 

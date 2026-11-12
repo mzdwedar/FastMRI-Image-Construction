@@ -1,64 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastmri_knee"]
+
+# Ship the Hydra configs inside the wheel so `pip install git+...` (Colab) can run the entrypoints
+[tool.hatch.build.targets.wheel.force-include]
+"configs" = "fastmri_knee/configs"
+
 [project]
 name = "fastmri-knee"
 version = "0.1.0"
-description = "MRI reconstruction with FastMRI and PyTorch"
+description = "Knee MRI reconstruction (U-Net) served with NVIDIA Triton and FastAPI, monitored with Prometheus and Grafana"
 readme = "README.md"
-requires-python = "==3.10.*"
+requires-python = ">=3.10,<3.13"  # must include Colab's Python; <3.13 because onnxruntime==1.17.3 has no 3.13 wheels
 
+# Core is deliberately tiny: preprocess.py (numpy) is shared by training and the torch-free gateway.
 dependencies = [
+    "numpy>=1.26",
+    "h5py>=3.14.0",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch>=2.2",
+    "pytorch-lightning>=2.2",
+    "torchmetrics>=1.3",
     "segmentation-models-pytorch==0.3.3",
+    "six>=1.16",  # undeclared dependency of pretrainedmodels (via smp); fails to import on a clean env without it
+    "omegaconf>=2.3.0",
+    "hydra-core>=1.3.2",
+    "mlflow==2.12.1",
+    "setuptools<81",  # mlflow 2.12.1 imports pkg_resources; drop with an MLflow upgrade
+    "fastmri>=0.3.0",
+    "optuna==3.6.0",
+    "optuna-integration>=3.6.0",  # tune.py imports optuna.integration, which moved out of optuna
+    "tqdm>=4.66",
+]
+export = [
+    "onnx>=1.19.0",
+    "onnxruntime==1.17.3",
+    "onnxscript>=0.5.3",
+]
+# Gateway deps are added task by task (G1+: structlog, opentelemetry, pydantic-settings). This is what the
+# legacy FastAPI app needs until G6 replaces it.
+gateway = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
+    "gunicorn>=21.2.0",
+    "python-multipart>=0.0.9",
     "prometheus-client>=0.20.0",
     "prometheus-fastapi-instrumentator>=7.0.0",
     "httpx>=0.27.0",
     "psutil>=5.9.8",
-    "omegaconf>=2.3.0",
     "pillow>=11.3.0",
     "pydantic>=2.11.9",
-    "h5py>=3.14.0",
-    "hydra-core>=1.3.2",
-    "mlflow==2.12.1",
-    "fastmri>=0.3.0",
-    "onnx>=1.19.0",
-    "onnxruntime==1.17.3",
-    "onnxscript>=0.5.3",
-    
-]
-
-[project.optional-dependencies]
-dev = [
-    "torchsummary>=1.5.1",
-    "torchinfo>=1.8.0",
-    "optuna==3.6.0",
-    "black>=24.0.0",
-    "ruff>=0.5.0",
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
-    "ipython>=8.0.0"
-]
-
-cpu = [
-    "torch",
-    "onnxruntime==1.17.3",
-]
-
-
-prod = [
-    "gunicorn>=21.2.0",
-    "uvicorn[standard]>=0.30.0",
-]
-
-triton = [
     "tritonclient[grpc,http]>=2.45.0",
     "grpcio>=1.60.0",
-    "protobuf>=5.27.0"
+    "protobuf>=5.27.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+    "ipython>=8.0.0",
+    "torchinfo>=1.8.0",
 ]
 
 [tool.uv.sources]
-torch = [
-    { index="torch-cpu", extra="cpu" },
-]
+# CPU wheels by default for local/CI; Colab installs from PyPI with pip and gets CUDA torch
+torch = { index = "torch-cpu" }
 
 [[tool.uv.index]]
 name = "torch-cpu"
@@ -67,9 +83,40 @@ url = "https://download.pytorch.org/whl/cpu"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
-override-dependencies = ["perf-analyzer==0"]
+# perf-analyzer (pulled in by tritonclient) ships Linux-only wheels; the client does not need it
+override-dependencies = ["perf-analyzer; sys_platform == 'never'"]
 
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["notebooks"]
+target-version = "py310"  # lowest supported; raise with requires-python
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",
+    # Hydra configs and deploy/jobs/workloads.sh read lowercase env vars (url, run_id, ...); renaming is an interface change
+    "SIM112",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.File", "fastapi.Depends"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
+# Temporary: the legacy FastAPI app (deploy/services/fastapi) is imported as `deploy.*` until task G6 replaces it
+pythonpath = ["."]
+markers = [
+    "integration: needs Docker (real Triton container)",
+    "e2e: needs the full Compose stack running",
+    "training: needs the FastMRI dataset in data/; never runs in CI",
+]
+
+[tool.mypy]
+files = ["src/fastmri_knee/preprocess.py", "src/fastmri_knee/packaging"]  # gateway/ is added in G1
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime.*"]
+ignore_missing_imports = true

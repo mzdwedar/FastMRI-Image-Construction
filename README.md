@@ -73,16 +73,16 @@ This project targets the FastMRI knee single-coil dataset. Acquire data from the
   - `data/val/*.h5`
   - `data/test/*.h5` (optional)
 
-You can adapt to other datasets by modifying `configs/datamodule.yaml` and the `src/data.py` dataset/transform logic.
+You can adapt to other datasets by modifying `configs/datamodule.yaml` and the `src/fastmri_knee/data/__init__.py` dataset/transform logic.
 
 ## 6. Data Preprocessing
-`src/data.py` defines `FastMRICustomDataset` and `FastMRITransform` that read HDF5, apply optional masks, and return tensors for the UNet. Random undersampling masks are controlled in code and configs.
+`src/fastmri_knee/data/__init__.py` defines `FastMRICustomDataset` and `FastMRITransform` that read HDF5, apply optional masks, and return tensors for the UNet. Random undersampling masks are controlled in code and configs.
 
 ## 7. Feature Engineering
 MRI-specific preprocessing focuses on k-space undersampling and image normalization rather than classic tabular feature engineering. Extend `FastMRITransform` for domain-specific augmentations if needed.
 
 ## 8. Model Architecture / Approach
-- UNet-based architecture defined in `src/model.py` with configurable channels/pools (`configs/model.yaml`).
+- UNet-based architecture defined in `src/fastmri_knee/model.py` with configurable channels/pools (`configs/model.yaml`).
 - Loss/metrics (e.g., PSNR) tracked via PyTorch Lightning.
 
 ## 9. Training
@@ -95,7 +95,7 @@ uv sync
 Run training with Hydra config:
 
 ```bash
-python scripts/train.py
+python -m fastmri_knee.train
 ```
 
 Key training config knobs (`configs/trainer.yaml`):
@@ -115,7 +115,7 @@ Model config (`configs/model.yaml`):
 Artifacts and metrics are logged under `mlruns/` (local file store by default).
 
 ## 10. Hyperparameter Tuning
-Skeleton support in `configs/trainer.yaml` under `trainer.tune` with `n_trials` and `timeout`. Integrate your preferred tuner (Optuna, Ray Tune) by extending `scripts/tune.py`.
+Skeleton support in `configs/trainer.yaml` under `trainer.tune` with `n_trials` and `timeout`. Integrate your preferred tuner (Optuna, Ray Tune) by extending `src/fastmri_knee/tune.py`.
 
 
 ## 11. Evaluation
@@ -123,7 +123,7 @@ Evaluate a trained checkpoint on a validation folder:
 
 ```bash
 # uses cfg.trainer.eval.data_path (defaults to ./data/val)
-python scripts/evaluate.py
+python -m fastmri_knee.evaluate
 ```
 
 Notes:
@@ -132,14 +132,14 @@ Notes:
 
 ## 12. Results / Visualizations
 - Metrics CSV and hyperparams are stored under `lightning_logs/` and `mlruns/`.
-- A sample Grafana panel `grafana_latency.png` shows serving latency distribution when FastAPI is instrumented.
+- A sample Grafana panel `docs/img/grafana_latency.png` shows serving latency distribution when FastAPI is instrumented.
 
 ## 13. Inference / Prediction
 Batch prediction to write volumes per file:
 
 ```bash
 # data path from cfg.trainer.predict.data_path (default: ./data/test)
-python scripts/predict.py
+python -m fastmri_knee.predict
 ```
 
 Outputs are saved under `trainer.PREDICTIONS_DIR` (defaults to `data/outputs/${run_id}/`).
@@ -166,7 +166,7 @@ Checkpoints are logged to run artifacts under `mlruns/<exp_id>/<run_id>/artifact
 
 ## 16. Model Versioning & Reproducibility
 - Runs are versioned via MLflow `experiment_name` and `run_id`.
-- Checkpoints are stored per run; `scripts.predict.get_best_checkpoint` selects the best in the `checkpoints` subdir.
+- Checkpoints are stored per run; `fastmri_knee.predict.get_best_checkpoint` selects the best in the `checkpoints` subdir.
 - Random seeds are set via `trainer.seeds`.
 
 ## 17. Configuration
@@ -176,11 +176,11 @@ Common overrides (environment-aware):
 
 ```bash
 # examples
-python scripts/train.py trainer.train.max_epochs=10 datamodule.batch_size=8
+python -m fastmri_knee.train trainer.train.max_epochs=10 datamodule.batch_size=8
 
 # or via env vars (see configs/trainer.yaml)
 export batch_size=8
-python scripts/train.py
+python -m fastmri_knee.train
 ```
 
 Key files:
@@ -200,17 +200,13 @@ Key files:
 │  └─ services/
 │     ├─ fastapi/              # FastAPI app, schemas, Docker compose
 │     └─ triton/               # Triton compose, model repo config
-├─ scripts/
-│  ├─ train.py                 # Train entrypoint
-│  ├─ evaluate.py              # Eval entrypoint
-│  ├─ predict.py               # Batch inference entrypoint
-│  ├─ predict_fastapi.py       # Client for FastAPI /predict
-│  ├─ predict_triton.py        # Client for Triton
-│  └─ convert_to_onnx.py       # Export ONNX for Triton
 ├─ src/
-│  ├─ data.py                  # Dataset + transforms
-│  ├─ model.py                 # LightningModule: UNet wrapper
-│  └─ resnet.py                # (optional) model variant
+│  └─ fastmri_knee/
+│     ├─ data/__init__.py      # Dataset + transforms
+│     ├─ model.py              # LightningModule: UNet wrapper
+│     ├─ metrics.py            # NMSE
+│     ├─ train.py evaluate.py predict.py tune.py   # Hydra entrypoints (python -m fastmri_knee.<name>)
+│     └─ packaging/export.py   # ONNX export + parity check
 ├─ monitoring/
 │  ├─ prometheus.yml           # FastAPI scrape config
 │  ├─ prometheus.triton.yml    # Triton scrape config
@@ -248,22 +244,26 @@ pytest -q
 2) Extract files into `data/train`, `data/val`, and optionally `data/test`.
 3) Verify `configs/datamodule.yaml` paths.
 
+Or let the CLI do steps 1-2: put the signed archive link in the `url` environment variable and run `make data`
+(`python -m fastmri_knee.data.prepare --root data`; `--archive FILE` uses an already-downloaded tarball). It downloads,
+extracts and splits train/val by subject. Training only checks that the data exists and tells you what to run if not.
+
 #### Train
 ```bash
 uv sync
-python scripts/train.py --config configs/config.yaml \
+python -m fastmri_knee.train --config configs/config.yaml \
   trainer.train.max_epochs=1 datamodule.batch_size=16
 ```
 
 #### Evaluate
 ```bash
-python scripts/evaluate.py --config configs/config.yaml \
+python -m fastmri_knee.evaluate --config configs/config.yaml \
   trainer.eval.data_path=./data/val
 ```
 
 #### Batch Predict
 ```bash
-python scripts/predict.py --config configs/config.yaml \
+python -m fastmri_knee.predict --config configs/config.yaml \
   trainer.predict.data_path=./data/test
 ```
 
@@ -282,11 +282,7 @@ python -m deploy.services.fastapi.main --checkpoint_path <PATH_TO_CKPT> \
   --host 0.0.0.0 --port 8000
 ```
 
-Client example:
-
-```bash
-python scripts/predict_fastapi.py  # edit file_path inside the script
-```
+Client example: the FastAPI client script was removed; the gateway (see SPEC-gateway.md) replaces it.
 
 With Prometheus + Grafana via compose in this repo directory:
 
@@ -312,7 +308,7 @@ Notes:
 1) Export ONNX from a trained checkpoint:
 
 ```bash
-python scripts/convert_to_onnx.py  # adjust checkpoint path inside script
+python -m fastmri_knee.packaging.export  # adjust checkpoint path inside script
 ```
 
 2) Place the exported ONNX into a Triton model repository (example in `deploy/services/triton/models/unet_model/`). Ensure the `config.pbtxt` matches input/output names and shapes.
@@ -329,14 +325,7 @@ docker compose -f deploy/services/triton/docker-compose.triton.yml up -d
 # Grafana:   http://localhost:3000
 ```
 
-4) Run Triton client for batch inference:
-
-```bash
-python scripts/predict_triton.py --config configs/config.yaml \
-  triton.server_url=localhost:8000 \
-  triton.model_name=unet_model \
-  triton.image_path=./data/test
-```
+4) The Triton batch client script was removed; the gateway (see SPEC-gateway.md) replaces it.
 
 Notes:
 - `configs/triton.yaml` defines inputs/outputs, model name, and server URL.
@@ -345,7 +334,7 @@ Notes:
 ### Monitoring
 - FastAPI compose scrapes the app at `/metrics` (`monitoring/prometheus.yml`).
 - Triton compose scrapes Triton at `/metrics` (`monitoring/prometheus.triton.yml`).
-- Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`grafana_latency.png`).
+- Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
 ### Pitfalls
 - Keep patient/series-level splits to avoid data leakage.
