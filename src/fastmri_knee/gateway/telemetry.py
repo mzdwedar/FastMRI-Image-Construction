@@ -53,7 +53,7 @@ GRPC_CODES = frozenset(
 INVALID_OUTPUT = "INVALID_OUTPUT"  # not a gRPC status: Triton answered OK but the tensor failed validation
 UNMATCHED = "unmatched"
 METRICS_PATH = "/metrics"
-_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 
 REQUESTS = Counter("gateway_requests_total", "HTTP requests", ["route", "method", "status_class"])
 REQUEST_DURATION = Histogram(
@@ -152,6 +152,6 @@ class MetricsMiddleware:
         finally:
             route = getattr(scope.get("route"), "path", None) or UNMATCHED  # set by the router during dispatch
             REQUESTS.labels(
-                route, scope["method"] if scope["method"] in _METHODS else "OTHER", f"{status // 100}xx"
+                route, scope["method"] if scope["method"] in METHODS else "OTHER", f"{status // 100}xx"
             ).inc()
             REQUEST_DURATION.labels(route).observe(time.perf_counter() - start)
