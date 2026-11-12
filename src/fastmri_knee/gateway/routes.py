@@ -1,11 +1,14 @@
 """Versioned API routes."""
 
 import asyncio
+import io
 from typing import Any
 
+import h5py
 import numpy as np
+import numpy.typing as npt
 import structlog
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from fastmri_knee.gateway.errors import ProblemError
@@ -17,7 +20,9 @@ from fastmri_knee.gateway.triton_client import (
     TritonTimeoutError,
     infer_volume,
 )
-from fastmri_knee.preprocess import PREPROCESS_VERSION
+from fastmri_knee.gateway.undersample import random_cartesian_mask
+from fastmri_knee.gateway.uploads import read_kspace, stream_file_part, temp_upload
+from fastmri_knee.preprocess import PREPROCESS_VERSION, kspace_to_image_scaled
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/v1")
@@ -26,6 +31,7 @@ probes = APIRouter()  # unversioned, unauthenticated
 SLICE_SHAPE = (1, 320, 320)
 SLICE_BYTES = int(np.prod(SLICE_SHAPE)) * 4
 OCTET_STREAM = "application/octet-stream"
+HDF5 = "application/x-hdf5"
 
 
 async def run_inference(request: Request, volume: F32) -> F32:
@@ -106,3 +112,60 @@ async def readyz(request: Request) -> JSONResponse:
     if state.ready and state.model:
         return JSONResponse({"status": "ready", "model_version": state.model.version})
     return JSONResponse({"status": "not_ready", "reason": state.reason}, status_code=503)
+
+
+def preprocess_volume(kspace: npt.NDArray[np.complex64], acceleration: int | None) -> tuple[F32, F32]:
+    """(S, H, W) complex64 -> ((S, 1, 320, 320) float32 model input, (S,) float32 per-slice scale).
+
+    One call per volume; each slice is normalized by its own max. Blocking: run in a worker thread.
+    """
+    mask = random_cartesian_mask(kspace.shape[-1], acceleration) if acceleration else None
+    pairs = [kspace_to_image_scaled(s, mask) for s in kspace]
+    return np.stack([p[0] for p in pairs]), np.array([p[1] for p in pairs], dtype=np.float32)
+
+
+def encode_reconstruction(recon: F32, scale: F32, model_version: str, request_id: str | None) -> bytes:
+    """HDF5 response: dataset `reconstruction` (S, 320, 320) float32 and root attrs."""
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_dataset("reconstruction", data=recon[:, 0].astype(np.float32, copy=False))
+        f.attrs["model_version"] = model_version
+        f.attrs["preprocess_version"] = PREPROCESS_VERSION
+        f.attrs["request_id"] = request_id or ""
+        f.attrs["scale"] = scale
+    return buf.getvalue()
+
+
+@router.post(
+    "/reconstructions",
+    summary="Reconstruct a k-space volume",
+    response_class=Response,
+    responses={200: {"content": {HDF5: {}}}},
+)
+async def reconstructions(
+    request: Request,
+    acceleration: int | None = Query(
+        None,
+        ge=2,
+        le=16,
+        description="DEMO FEATURE. Simulate undersampling of a fully sampled file with a random Cartesian mask "
+        "at this acceleration factor. Off by default.",
+    ),
+) -> Response:
+    """Upload: multipart field `file`, a single-coil `.h5` with `kspace` (slices, H, W) complex64.
+
+    Returns `application/x-hdf5`: dataset `reconstruction` (slices, 320, 320) float32 and root attributes
+    `model_version`, `preprocess_version`, `request_id`, and `scale` (per-slice max the model input was divided
+    by, so `reconstruction * scale[:, None, None]` restores relative intensity).
+    """
+    settings = request.app.state.settings
+    with temp_upload(settings.tmp_dir) as path:
+        await stream_file_part(request, path, settings.max_upload_mb << 20)
+        kspace = await asyncio.to_thread(read_kspace, path, settings.max_slices)
+    images, scale = await asyncio.to_thread(preprocess_volume, kspace, acceleration)
+    recon = await run_inference(request, images)
+    version = request.app.state.readiness.model_version or "unknown"
+    body = await asyncio.to_thread(
+        encode_reconstruction, recon, scale, version, getattr(request.state, "request_id", None)
+    )
+    return Response(body, media_type=HDF5)

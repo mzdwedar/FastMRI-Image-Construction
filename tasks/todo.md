@@ -279,7 +279,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_readiness.py`.
   - Deps: G2 · Files: `src/fastmri_knee/gateway/{readiness,routes}.py`, `tests/unit/gateway/test_readiness.py`
 
-- [ ] **G4: `/v1/reconstructions`** — M
+- [x] **G4: `/v1/reconstructions`** — M
   - Do: streamed upload to temp file with byte limit; h5 validation (dataset, rank, dtype, slice count); numpy
     preprocess in threadpool; optional `acceleration`; response h5 (`reconstruction` + attrs); cleanup on
     success/error/disconnect.
