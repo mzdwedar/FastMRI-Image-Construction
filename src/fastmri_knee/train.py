@@ -16,6 +16,7 @@ from pytorch_lightning.loggers import MLFlowLogger
 from fastmri_knee import utils
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
+from fastmri_knee.packaging.card import pick_val_metrics
 from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.run_summary import build_summary, write_summary
 
@@ -172,7 +173,13 @@ def train_fn(cfg: DictConfig) -> dict:
         for name, value in hparams.items():
             client.log_param(run_id, name, value)
 
-    if best_checkpoint:
+    if best_checkpoint and not pick_val_metrics(metrics):
+        # Resuming a run that had already reached max_epochs trains and validates nothing, so there is
+        # nothing new to record: keep the summary from the run that did the work.
+        logging.warning(
+            "No validation metrics from this invocation (run already complete?): keeping the existing run_summary.json"
+        )
+    elif best_checkpoint:
         summary_path = write_summary(
             Path(best_checkpoint),
             build_summary(

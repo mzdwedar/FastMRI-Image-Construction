@@ -80,3 +80,14 @@ def test_num_samples_limits_the_slices_used(workspace):
 
     summary = json.loads((workspace / "ckpt" / "run_summary.json").read_text())
     assert summary["global_step"] == 1
+
+
+def test_rerunning_a_finished_run_keeps_the_summary_and_its_metrics(workspace):
+    run(workspace, max_steps=-1, max_epochs=1)
+    summary_file = workspace / "ckpt" / "run_summary.json"
+    before = summary_file.read_text()
+    assert json.loads(before)["val_metrics"]
+
+    run(workspace, max_steps=-1, max_epochs=1)  # same max_epochs: resumes at the end, trains nothing
+
+    assert summary_file.read_text() == before  # not overwritten by an empty-metrics, resumed_from summary
