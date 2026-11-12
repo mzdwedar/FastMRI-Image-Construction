@@ -48,5 +48,9 @@ def test_image_runs_as_non_root(image):
 def test_image_has_no_torch(image):
     r = docker("run", "--rm", "--entrypoint", "python", image, "-c", "import torch")
     assert r.returncode != 0 and "ModuleNotFoundError" in r.stderr
-    r = docker("run", "--rm", "--entrypoint", "python", image, "-c", "import fastmri_knee.gateway.app")
+    # gunicorn's on_starting creates PROMETHEUS_MULTIPROC_DIR; importing the app directly has to do it itself
+    r = docker(
+        "run", "--rm", "--entrypoint", "sh", image,
+        "-c", 'mkdir -p "$PROMETHEUS_MULTIPROC_DIR" && python -c "import fastmri_knee.gateway.app"',
+    )  # fmt: skip
     assert r.returncode == 0, r.stderr

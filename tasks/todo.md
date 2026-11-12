@@ -230,8 +230,9 @@ task that needs them is reached.
 
 - [x] **T3: Triton integration tests** — M · done 2026-11-12: `tests/integration/test_triton.py` (3 tests, ~75 s). Finding:
   Triton 24.08 returns 200 on `/v2/health/ready` for an empty repo even with strict readiness; the per-model endpoint
-  (400) is what gates readiness, so the test asserts that and SPEC-inference-server is corrected. Unrelated failure
-  seen in `make test-integration`: `test_image.py::test_image_has_no_torch` (`/dev/shm/prometheus` missing at import).
+  (400) is what gates readiness, so the test asserts that and SPEC-inference-server is corrected. Also fixed
+  `test_image.py::test_image_has_no_torch` (the test imported the app without gunicorn, which creates
+  `/dev/shm/prometheus`); `make test-integration` is green (11 passed).
   - Do: tests: strict readiness (empty → 503), output equals onnxruntime (`atol=1e-5`), overload (512 concurrent)
     rejected while server stays live.
   - Acceptance/Verify: `make test-integration` green.
