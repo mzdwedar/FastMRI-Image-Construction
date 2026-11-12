@@ -13,7 +13,7 @@ SLICE = 320 * 320
 
 
 def make_client(fake, **settings):
-    app = create_app(Settings(env="dev", **settings), triton=fake)
+    app = create_app(Settings(env="dev", auth_disabled=True, **settings), triton=fake)
     return TestClient(app, raise_server_exceptions=False)
 
 

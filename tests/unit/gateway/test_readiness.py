@@ -12,7 +12,7 @@ from tests.unit.gateway.fakes import FakeTritonClient
 
 
 def make_client(fake, interval=0.05):
-    app = create_app(Settings(env="dev", readiness_interval_s=interval), triton=fake)
+    app = create_app(Settings(env="dev", auth_disabled=True, readiness_interval_s=interval), triton=fake)
     return TestClient(app, raise_server_exceptions=False)
 
 

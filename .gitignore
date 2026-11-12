@@ -239,3 +239,6 @@ latest_version.txt
 
 # Triton model repository, materialized from the MLflow registry by `make sync`
 /deploy/model_repository/
+
+# Local secrets (S6): API key hashes, never commit
+secrets/

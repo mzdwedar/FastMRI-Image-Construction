@@ -50,6 +50,9 @@ promote: ## Gated promote: make promote VERSION=3 [ALIAS=production] [FORCE=1] [
 rollback: ## Restore previous_production (skips the PSNR gate)
 	uv run python -m fastmri_knee.packaging rollback --tracking-uri $(MLFLOW_TRACKING_URI)
 
+api-key: ## Mint a gateway API key: prints it once, appends its hash to secrets/api_keys
+	@uv run python -m fastmri_knee.gateway.auth secrets/api_keys 2>/dev/null
+
 up: ## Start the Compose stack (MLflow :5001 plus serving)
 	mkdir -p deploy/model_repository
 	docker compose up -d
@@ -71,4 +74,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev down data train clean
