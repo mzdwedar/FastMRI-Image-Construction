@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     workers: int = Field(default=2, ge=1)
 
     triton_url: str = "triton:8001"
+    triton_model_name: str = "unet_model"
     triton_timeout_s: float = Field(default=10.0, gt=0)
 
     max_upload_mb: int = Field(default=256, ge=1)

@@ -265,7 +265,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/gateway/test_app.py`.
   - Deps: F6, F10 · Files: `src/fastmri_knee/gateway/{app,settings,errors,logging}.py`, `tests/unit/gateway/test_app.py`
 
-- [ ] **G2: Triton client and `/v1/infer` (first end-to-end slice)** — M
+- [x] **G2: Triton client and `/v1/infer` (first end-to-end slice)** — M
   - Do: `triton_client.py` (grpc.aio, chunking by max_batch_size from model config, retry UNAVAILABLE only,
     deadlines, finite-output check); `/v1/infer` route; `FakeTritonClient` for tests.
   - Acceptance: chunking 1/16/17/64; retry vs no-retry codes; deadline → 504; non-finite → 500; N > 64 → 413.

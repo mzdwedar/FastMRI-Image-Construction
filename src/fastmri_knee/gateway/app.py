@@ -1,4 +1,4 @@
-"""App factory. Routes are added by later tasks (G2+)."""
+"""App factory."""
 
 import re
 import uuid
@@ -12,7 +12,9 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from fastmri_knee.gateway.errors import install_handlers, problem_response
 from fastmri_knee.gateway.logging import configure_logging
+from fastmri_knee.gateway.routes import router
 from fastmri_knee.gateway.settings import Settings
+from fastmri_knee.gateway.triton_client import GrpcTritonClient, TritonClient
 
 log = structlog.get_logger()
 _VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
@@ -53,20 +55,26 @@ class RequestIdMiddleware:
             await response(scope, receive, send_with_id)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, triton: TritonClient | None = None) -> FastAPI:
     settings = settings or Settings()  # invalid settings raise here, at startup
     configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # One gRPC channel per worker. Creating it makes no network call, so the gateway starts without Triton.
+        app.state.triton = triton or GrpcTritonClient(settings.triton_url, settings.triton_model_name)
         log.info("gateway_started", env=settings.env)
-        yield
-        log.info("gateway_stopped")
+        try:
+            yield
+        finally:
+            await app.state.triton.close()
+            log.info("gateway_stopped")
 
     app = FastAPI(title="fastmri-knee gateway", version="1", lifespan=lifespan)
     app.state.settings = settings
     app.add_middleware(RequestIdMiddleware)
     install_handlers(app)
+    app.include_router(router)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
