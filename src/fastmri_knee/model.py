@@ -16,7 +16,15 @@ class UnetModel(pl.LightningModule):
     supports training, validation, and testing with metrics including NMSE, PSNR, and SSIM.
     """
 
-    def __init__(self, lr, weight_decay, optimizer_name, num_chans, num_pools, scheduler_config=None):
+    def __init__(
+        self,
+        lr: float,
+        weight_decay: float,
+        optimizer_name: str,
+        num_chans: int,
+        num_pools: int,
+        scheduler_config: dict | None = None,
+    ) -> None:
         """
         Initializes the UnetModel model with UnetModel, loss functions, and image quality metrics.
         """

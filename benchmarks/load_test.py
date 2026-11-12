@@ -53,10 +53,7 @@ def triton_request(base: str, model: str, payload: bytes):
 def check_response(resp: httpx.Response, backend: str) -> None:
     resp.raise_for_status()
     expected = int(np.prod(SHAPE)) * 4
-    if backend == "triton":
-        body = resp.content[int(resp.headers["Inference-Header-Content-Length"]) :]
-    else:
-        body = resp.content
+    body = resp.content[int(resp.headers["Inference-Header-Content-Length"]) :] if backend == "triton" else resp.content
     if len(body) != expected:
         raise ValueError(f"unexpected output size {len(body)} != {expected}")
 

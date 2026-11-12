@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 import os
-from typing import Dict, Optional
 
 import hydra
 import mlflow
@@ -28,7 +27,7 @@ class StopOnFirstImprovement(Callback):
         self.monitor = monitor
         self.mode = mode
         self.min_delta = min_delta
-        self.best_value: Optional[float] = None
+        self.best_value: float | None = None
 
     def _is_improvement(self, current: float) -> bool:
         if self.best_value is None:
@@ -62,7 +61,7 @@ class StopOnFirstImprovement(Callback):
                 self.best_value = current_val
 
 
-def train_fn(cfg: DictConfig) -> Dict:
+def train_fn(cfg: DictConfig) -> dict:
     """Function to train the model"""
     pl.seed_everything(cfg.trainer.seeds)
     checkpoint_config = ModelCheckpoint(

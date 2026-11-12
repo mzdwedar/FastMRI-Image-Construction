@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 
@@ -96,10 +97,8 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
     best_score = trainer.callback_metrics.get(monitor_metric)
 
     # Save checkpoint path on the trial for later retrieval
-    try:
+    with contextlib.suppress(Exception):
         trial.set_user_attr("best_checkpoint", checkpoint_cb.best_model_path)
-    except Exception:  # noqa: BLE001
-        pass
     return float(best_score.detach().cpu().item()) if hasattr(best_score, "detach") else float(best_score)
 
 

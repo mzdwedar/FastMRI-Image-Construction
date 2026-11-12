@@ -111,4 +111,4 @@ def test_subject_split_consistency():
                         files_b = split_files[b].get(pid, [])
                         overlap_info.append(f"Subject ID: {pid}\n  {a} files: {files_a}\n  {b} files: {files_b}")
                     msg = f"Subject overlap between {a} and {b}:\n" + "\n".join(overlap_info)
-                    assert False, msg
+                    raise AssertionError(msg)

@@ -77,7 +77,7 @@ task that needs them is reached.
   - Verify: unit test of the missing-data error; `make data --help`.
   - Deps: F4 · Files: `src/fastmri_knee/data/prepare.py`, `src/fastmri_knee/data/…`, `tests/unit/test_data_prepare.py`, `Makefile`
 
-- [ ] **F10: Lint/format/type tooling and pre-commit** — S
+- [x] **F10: Lint/format/type tooling and pre-commit** — S
   - Do: ruff rules `E,F,I,B,UP,SIM` + `ruff format` (drop black); mypy config (strict on `preprocess.py`,
     `packaging/`, later `gateway/`); `.pre-commit-config.yaml` with ruff + gitleaks; fix findings.
   - Acceptance: `make lint typecheck` clean.

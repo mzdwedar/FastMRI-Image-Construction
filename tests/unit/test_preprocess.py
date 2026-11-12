@@ -41,7 +41,7 @@ def test_output_contract():
     out = kspace_to_image(synth_kspace(640, 368))
     assert out.shape == (1, 320, 320)
     assert out.dtype == np.float32
-    assert 0.0 <= out.min() and out.max() <= 1.0
+    assert out.min() >= 0.0 and out.max() <= 1.0
 
 
 def test_accepts_leading_channel_axis():

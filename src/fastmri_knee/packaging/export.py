@@ -41,7 +41,7 @@ def export(module: UnetModel, onnx_path: Path, opset: int = 17) -> None:
     onnx_path.parent.mkdir(parents=True, exist_ok=True)
     torch.onnx.export(
         net,
-        torch.randn(1, *INPUT_SHAPE),
+        (torch.randn(1, *INPUT_SHAPE),),
         str(onnx_path),
         input_names=["input"],
         output_names=["output"],

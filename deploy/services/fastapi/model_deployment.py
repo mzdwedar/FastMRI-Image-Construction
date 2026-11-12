@@ -33,7 +33,7 @@ class ModelDeployment:
         for batch in data_loader:
             images, fnames, slice_nums = batch[0], batch[-2], batch[-1]
             preds = self.infer(images.numpy())
-            for fname, slice_num, pred in zip(fnames, slice_nums.tolist(), preds):
+            for fname, slice_num, pred in zip(fnames, slice_nums.tolist(), preds, strict=False):
                 by_file[fname].append((slice_num, pred))
         return {f: np.stack([p for _, p in sorted(s, key=lambda x: x[0])]) for f, s in by_file.items()}
 

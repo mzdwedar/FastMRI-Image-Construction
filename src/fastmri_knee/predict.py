@@ -166,9 +166,9 @@ def main(cfg: DictConfig):
     logging.info(f"Number of prediction batches: {len(predictions)}")
 
     pred_by_file = defaultdict(list)
-    for pred in tqdm(predictions, desc="creating volumes from slices"):
-        full_path_fname = pred["fname"][0]
-        for pred, slice_num in zip(pred["pred"], pred["slice_num"]):
+    for batch in tqdm(predictions, desc="creating volumes from slices"):
+        full_path_fname = batch["fname"][0]
+        for pred, slice_num in zip(batch["pred"], batch["slice_num"], strict=False):
             pred_by_file[full_path_fname].append((slice_num.item(), pred.cpu().numpy()))
 
     for full_path_fname, slices in tqdm(pred_by_file.items(), desc="saving volumes"):
