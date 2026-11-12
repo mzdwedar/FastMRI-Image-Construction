@@ -30,11 +30,19 @@ def fastapi_request(base: str, payload: bytes):
 
 
 def triton_request(base: str, model: str, payload: bytes):
-    header = json.dumps({
-        "inputs": [{"name": "input", "shape": list(SHAPE), "datatype": "FP32",
-                    "parameters": {"binary_data_size": len(payload)}}],
-        "outputs": [{"name": "output", "parameters": {"binary_data": True}}],
-    }).encode()
+    header = json.dumps(
+        {
+            "inputs": [
+                {
+                    "name": "input",
+                    "shape": list(SHAPE),
+                    "datatype": "FP32",
+                    "parameters": {"binary_data_size": len(payload)},
+                }
+            ],
+            "outputs": [{"name": "output", "parameters": {"binary_data": True}}],
+        }
+    ).encode()
     return dict(
         url=f"{base}/v2/models/{model}/infer",
         content=header + payload,
@@ -46,7 +54,7 @@ def check_response(resp: httpx.Response, backend: str) -> None:
     resp.raise_for_status()
     expected = int(np.prod(SHAPE)) * 4
     if backend == "triton":
-        body = resp.content[int(resp.headers["Inference-Header-Content-Length"]):]
+        body = resp.content[int(resp.headers["Inference-Header-Content-Length"]) :]
     else:
         body = resp.content
     if len(body) != expected:
@@ -93,7 +101,9 @@ async def main_async(args):
         base = args.url or "http://localhost:8100"
         req = triton_request(base, args.model, payload)
 
-    limits = httpx.Limits(max_connections=max(args.concurrency) + 8, max_keepalive_connections=max(args.concurrency) + 8)
+    limits = httpx.Limits(
+        max_connections=max(args.concurrency) + 8, max_keepalive_connections=max(args.concurrency) + 8
+    )
     async with httpx.AsyncClient(timeout=120, limits=limits) as client:
         resp = await client.post(**req)  # fail fast if the backend isn't up
         check_response(resp, args.backend)
@@ -101,8 +111,11 @@ async def main_async(args):
         for c in args.concurrency:
             step = await run_step(client, req, args.backend, c, args.warmup, args.duration)
             lat = step["latency_ms"]
-            print(f"c={c:>3}  {step['throughput_rps']:7.1f} req/s   p50 {lat['p50']:8.1f} ms   "
-                  f"p95 {lat['p95']:8.1f} ms   p99 {lat['p99']:8.1f} ms   errors {step['errors']}", flush=True)
+            print(
+                f"c={c:>3}  {step['throughput_rps']:7.1f} req/s   p50 {lat['p50']:8.1f} ms   "
+                f"p95 {lat['p95']:8.1f} ms   p99 {lat['p99']:8.1f} ms   errors {step['errors']}",
+                flush=True,
+            )
             steps.append(step)
             await asyncio.sleep(args.cooldown)
     return {

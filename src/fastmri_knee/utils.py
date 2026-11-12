@@ -12,7 +12,7 @@ def load_dict(path: str) -> dict:
     Returns:
         Dict: loaded JSON data.
     """
-    with open(path, encoding='utf-8') as fp:
+    with open(path, encoding="utf-8") as fp:
         d = json.load(fp)
     return d
 
@@ -29,6 +29,6 @@ def save_dict(d: dict, path: str, cls: Any = None, sortkeys: bool = False) -> No
     directory = os.path.dirname(path)
     if directory and not os.path.exists(directory):  # pragma: no cover
         os.makedirs(directory)
-    with open(path, "w", encoding='utf-8') as fp:
+    with open(path, "w", encoding="utf-8") as fp:
         json.dump(d, indent=2, fp=fp, cls=cls, sort_keys=sortkeys)
         fp.write("\n")

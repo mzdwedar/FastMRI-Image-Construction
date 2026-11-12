@@ -20,6 +20,7 @@ from fastmri_knee.paths import CONFIG_PATH
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
     try:
         mlflow_logger = MLFlowLogger(
@@ -29,7 +30,9 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
             log_model=False,
         )
     except MlflowException as exc:
-        print(f"Warning: Failed to connect to MLflow at {cfg.trainer.MLFLOW_TRACKING_URI} ({exc}). Falling back to local file store.")
+        print(
+            f"Warning: Failed to connect to MLflow at {cfg.trainer.MLFLOW_TRACKING_URI} ({exc}). Falling back to local file store."
+        )
         local_tracking_uri = f"file:{os.path.abspath('mlruns')}"
         mlflow_logger = MLFlowLogger(
             experiment_name=cfg.trainer.train.experiment_name,
@@ -56,7 +59,14 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
     num_pools = trial.suggest_categorical("num_pools", [3, 4, 5])
     batch_size = trial.suggest_categorical("batch_size", [4, 8, 16])
 
-    model = UnetModel(lr=lr, weight_decay=weight_decay, optimizer_name=optimizer_name, num_chans=num_chans, num_pools=num_pools, scheduler_config=cfg.trainer.train.scheduler)
+    model = UnetModel(
+        lr=lr,
+        weight_decay=weight_decay,
+        optimizer_name=optimizer_name,
+        num_chans=num_chans,
+        num_pools=num_pools,
+        scheduler_config=cfg.trainer.train.scheduler,
+    )
     mask_func = RandomMaskFunc(center_fractions=[0.08], accelerations=[4])
 
     datamodule = FastMRIDataModule(
@@ -68,7 +78,6 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
         batch_size,
         cfg.datamodule.num_workers,
     )
-    
 
     trainer = Trainer(
         accelerator=cfg.trainer.accelerator,
@@ -92,6 +101,7 @@ def _objective(trial: optuna.Trial, cfg: DictConfig) -> float:
     except Exception:  # noqa: BLE001
         pass
     return float(best_score.detach().cpu().item()) if hasattr(best_score, "detach") else float(best_score)
+
 
 @hydra.main(version_base=None, config_path=CONFIG_PATH, config_name="config")
 def tune_models(cfg: DictConfig):

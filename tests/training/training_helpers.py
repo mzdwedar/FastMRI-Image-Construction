@@ -17,14 +17,14 @@ EMPTY_STD_THRESHOLD = 1e-4
 DUPLICATE_HASHES_FAIL = True
 
 
-
 def open_k_and_recon(h5path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
-    with h5py.File(h5path, 'r') as f:
-        k = f['kspace'][()]
-        recon_key = next(k for k in ('reconstruction_esc','reconstruction_rss','recon') if k in f)
+    with h5py.File(h5path, "r") as f:
+        k = f["kspace"][()]
+        recon_key = next(k for k in ("reconstruction_esc", "reconstruction_rss", "recon") if k in f)
         recon = f[recon_key][()]
         attrs = dict(f.attrs)
     return k, recon, attrs
+
 
 def compute_ifft_magnitude(k: np.ndarray) -> np.ndarray:
     # Use torch-centered IFFT from fastmri_knee.data then convert to numpy magnitude
@@ -37,9 +37,9 @@ def compute_ifft_magnitude(k: np.ndarray) -> np.ndarray:
     mag = mag_t.cpu().numpy()
     return mag
 
+
 __all__ = [
     "DATA_DIR",
     "SAMPLE_LIMIT",
     "open_k_and_recon",
-
 ]

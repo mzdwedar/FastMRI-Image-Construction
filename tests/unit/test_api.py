@@ -77,6 +77,11 @@ def test_evaluate_reports_image_metrics(client, h5_file):
 
 def test_metrics_exposes_inference_series(client):
     text = client.get("/metrics").text
-    for name in ("inference_requests_total", "inference_latency_seconds_bucket", "inference_batch_size_bucket",
-                 "process_rss_bytes", "http_requests_total"):
+    for name in (
+        "inference_requests_total",
+        "inference_latency_seconds_bucket",
+        "inference_batch_size_bucket",
+        "process_rss_bytes",
+        "http_requests_total",
+    ):
         assert name in text, name

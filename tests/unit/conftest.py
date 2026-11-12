@@ -28,7 +28,7 @@ def onnx_model(checkpoint, tmp_path_factory):
 def write_fastmri_h5(path, num_slices=3, with_target=True):
     """Single-coil knee layout: complex k-space (slices, 640, 368) + 320x320 RSS target."""
     rng = np.random.default_rng(0)
-    kspace = (rng.standard_normal((num_slices, 640, 368)) + 1j * rng.standard_normal((num_slices, 640, 368)))
+    kspace = rng.standard_normal((num_slices, 640, 368)) + 1j * rng.standard_normal((num_slices, 640, 368))
     with h5py.File(path, "w") as f:
         f.create_dataset("kspace", data=kspace.astype(np.complex64))
         if with_target:

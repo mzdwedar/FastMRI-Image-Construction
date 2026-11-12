@@ -11,17 +11,17 @@ from .metrics import nmse
 class UnetModel(pl.LightningModule):
     """
     A PyTorch Lightning module for MRI image reconstruction using a UnetModel architecture.
-    
+
     This model predicts fully-sampled images from undersampled MRI measurements and
     supports training, validation, and testing with metrics including NMSE, PSNR, and SSIM.
     """
-    
+
     def __init__(self, lr, weight_decay, optimizer_name, num_chans, num_pools, scheduler_config=None):
         """
         Initializes the UnetModel model with UnetModel, loss functions, and image quality metrics.
         """
         super().__init__()
-        
+
         self.save_hyperparameters(
             {
                 "lr": lr,
@@ -34,12 +34,12 @@ class UnetModel(pl.LightningModule):
         )
 
         self.model = smp.Unet(
-                encoder_name="resnet18",
-                encoder_weights=None,
-                in_channels=1,
-                classes=1,
+            encoder_name="resnet18",
+            encoder_weights=None,
+            in_channels=1,
+            classes=1,
         )
-        
+
         # Metrics for validation
         self.psnr = PeakSignalNoiseRatio(data_range=1.0)
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
@@ -47,14 +47,14 @@ class UnetModel(pl.LightningModule):
         # Metrics for testing
         self.psnr_test = PeakSignalNoiseRatio(data_range=1.0)
         self.ssim_test = StructuralSimilarityIndexMeasure(data_range=1.0)
-    
+
     def forward(self, x):
         """
         Performs a forward pass through the UnetModel model.
-        
+
         Args:
             x (torch.Tensor): Input image tensor of shape (B, C, H, W)
-            
+
         Returns:
             torch.Tensor: Reconstructed image tensor of shape (B, C, H, W)
         """
@@ -64,11 +64,11 @@ class UnetModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """
         Performs a single training step.
-        
+
         Args:
             batch (tuple): Tuple containing input images and ground truth (x, y)
             batch_idx (int): Index of the batch
-            
+
         Returns:
             torch.Tensor: Computed L1 loss for the batch
         """
@@ -76,11 +76,11 @@ class UnetModel(pl.LightningModule):
         logits = self.model(x)
         loss = F.l1_loss(logits, y)
         return loss
-    
+
     def validation_step(self, batch, batch_idx):
         """
         Performs a single validation step and updates metrics.
-        
+
         Args:
             batch (tuple): Tuple containing input images and ground truth (x, y)
             batch_idx (int): Index of the batch
@@ -92,10 +92,10 @@ class UnetModel(pl.LightningModule):
         nmse_val = nmse(logits, y)
         self.psnr.update(logits, y)
         self.ssim.update(logits, y)
-    
+
         self.log("val_loss", loss, prog_bar=True)
         self.log("nmse", nmse_val, prog_bar=True)
-    
+
     def on_validation_epoch_end(self):
         """
         Computes and logs PSNR and SSIM at the end of the validation epoch.
@@ -105,11 +105,11 @@ class UnetModel(pl.LightningModule):
         self.log("ssim", self.ssim.compute(), prog_bar=True, on_epoch=True)
         self.psnr.reset()
         self.ssim.reset()
-    
+
     def test_step(self, batch, batch_idx):
         """
         Performs a single test step and updates metrics.
-        
+
         Args:
             batch (tuple): Tuple containing input images and ground truth (x, y)
             batch_idx (int): Index of the batch
@@ -121,16 +121,17 @@ class UnetModel(pl.LightningModule):
         nmse_test = nmse(logits, y)
         self.psnr_test.update(logits, y)
         self.ssim_test.update(logits, y)
-      
+
         self.log("test_loss", loss, batch_size=x.size(0), prog_bar=True)
         self.log("nmse_test", nmse_test, batch_size=x.size(0), prog_bar=True)
 
-        return {'test_loss': loss,
-                'nmse_test': nmse_test,
-                'psnr_test': self.psnr_test.compute(),
-                'ssim_test': self.ssim_test.compute()
-                }
-    
+        return {
+            "test_loss": loss,
+            "nmse_test": nmse_test,
+            "psnr_test": self.psnr_test.compute(),
+            "ssim_test": self.ssim_test.compute(),
+        }
+
     def on_test_epoch_end(self):
         """
         Computes and logs PSNR and SSIM at the end of the test epoch.
@@ -145,13 +146,12 @@ class UnetModel(pl.LightningModule):
         x, fname, slice_num = batch
         pred = self(x)
 
-        return {'pred':pred, 'fname':fname, 'slice_num':slice_num}
-        
-    
+        return {"pred": pred, "fname": fname, "slice_num": slice_num}
+
     def configure_optimizers(self):
         """
         Configures the optimizer for training.
-        
+
         Returns:
             torch.optim.Optimizer
         """
@@ -161,15 +161,15 @@ class UnetModel(pl.LightningModule):
             optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
         else:
             raise ValueError(f"Unsupported optimizer: {self.hparams.optimizer_name}")
-        
+
         scheduler_cfg = getattr(self.hparams, "scheduler", None)
         if not scheduler_cfg:
             return optimizer
-        
+
         scheduler_cls = getattr(torch.optim.lr_scheduler, scheduler_cfg.name, None)
         if scheduler_cls is None:
             raise ValueError(f"Unsupported scheduler: {scheduler_cfg.name}")
-        
+
         scheduler_params = OmegaConf.to_container(scheduler_cfg.params, resolve=True) or {}
         scheduler = scheduler_cls(optimizer, **scheduler_params)
 

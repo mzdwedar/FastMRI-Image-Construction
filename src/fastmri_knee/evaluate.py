@@ -15,8 +15,7 @@ from fastmri_knee.paths import CONFIG_PATH
 from fastmri_knee.predict import TorchPredictor, get_best_checkpoint, get_best_run_id
 
 
-def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
-                data_loader:DataLoader, run_id:str = None):
+def evaluate_fn(trainer: Trainer, predictor: TorchPredictor, data_loader: DataLoader, run_id: str = None):
     """
     Evaluate the model using the provided trainer and data loader.
     Args:
@@ -27,21 +26,18 @@ def evaluate_fn(trainer:Trainer, predictor: TorchPredictor,
     Returns:
         dict: A dictionary containing the evaluation metrics, including a timestamp and run ID.
     """
-    
+
     test_metrics = trainer.test(predictor.model, data_loader, verbose=True)
 
-    metrics = {
-        "timestamp": datetime.now().isoformat(),
-        "run_id": run_id if run_id else "None",
-        "overall": test_metrics
-    }
+    metrics = {"timestamp": datetime.now().isoformat(), "run_id": run_id if run_id else "None", "overall": test_metrics}
 
     return metrics
+
 
 @hydra.main(version_base=None, config_path=CONFIG_PATH, config_name="config")
 def main(cfg: DictConfig):
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
-    
+
     data_path = to_absolute_path(cfg.trainer.eval.data_path)
     dataset = FastMRICustomDataset(data_path, transform=FastMRITransform(mask_func=None))
     data_loader = DataLoader(dataset, batch_size=8, num_workers=10, shuffle=False)
@@ -50,12 +46,10 @@ def main(cfg: DictConfig):
     checkpoint_path = get_best_checkpoint(run_id)
     predictor = TorchPredictor.from_checkpoint(checkpoint_path)
 
-    trainer = Trainer(accelerator=cfg.trainer.accelerator,
-                      devices=cfg.trainer.gpus
-                    )
-    
+    trainer = Trainer(accelerator=cfg.trainer.accelerator, devices=cfg.trainer.gpus)
+
     metrics = evaluate_fn(trainer, predictor, data_loader, run_id)
-    
+
     results_fp = cfg.trainer.EVAL_RESULTS_FILE
 
     logger.info(json.dumps(metrics, indent=2))
@@ -63,5 +57,6 @@ def main(cfg: DictConfig):
         utils.save_dict(metrics, results_fp)
     return metrics
 
+
 if __name__ == "__main__":
-    main() # pylint: disable=no-value-for-parameter
+    main()  # pylint: disable=no-value-for-parameter

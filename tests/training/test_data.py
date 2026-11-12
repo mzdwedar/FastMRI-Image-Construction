@@ -20,16 +20,18 @@ def get_train_val_h5_files():
             files.extend(list_files(str(split_dir), limit=cfg.SAMPLE_LIMIT))
     return files
 
+
 @pytest.mark.parametrize("h5path", get_train_val_h5_files())
 def test_h5_keys_and_shapes(h5path):
-    """File opens and has expected keys & single-coil layout for train and val splits.""" 
-    with h5py.File(h5path, 'r') as f:
-        assert 'kspace' in f, f"{h5path} missing 'kspace'"
-        
-        assert any(k in f for k in ('reconstruction_esc', 'reconstruction_rss', 'recon')), \
+    """File opens and has expected keys & single-coil layout for train and val splits."""
+    with h5py.File(h5path, "r") as f:
+        assert "kspace" in f, f"{h5path} missing 'kspace'"
+
+        assert any(k in f for k in ("reconstruction_esc", "reconstruction_rss", "recon")), (
             f"{h5path} missing reconstruction key (reconstruction_esc/reconstruction_rss/recon)"
-        
-        k = f['kspace'] #all slices shape: [*,H,W]
+        )
+
+        k = f["kspace"]  # all slices shape: [*,H,W]
 
         for n_slice in range(k.shape[0]):
             # singlecoil fastMRI sometimes stores (H,W) or (1,H,W)
@@ -39,12 +41,12 @@ def test_h5_keys_and_shapes(h5path):
             if kslice.ndim == 3:
                 # expect first dim==1 for single-coil
                 assert kslice.shape[0] == 1, f"expected single-coil file but first dim !=1 in {h5path}"
-            
+
             # dtype should be complex
             assert np.iscomplexobj(kslice), f"kspace not complex in {h5path}"
             # check reconstruction dims roughly match image size
             # read matching reconstruction for this slice
-            recon_key = next(k for k in ('reconstruction_esc', 'reconstruction_rss', 'recon') if k in f)
+            recon_key = next(k for k in ("reconstruction_esc", "reconstruction_rss", "recon") if k in f)
             recon = f[recon_key][n_slice]
             assert recon.ndim == 2, f"expected 2D reconstruction, got {recon.shape} in {h5path}"
             # shapes test: if k is (1,H,W) then recon shape should be (H,W) or close after cropping
@@ -80,10 +82,10 @@ def test_subject_split_consistency():
         ids = set()
         id_to_files = {}
         for p in split_dir.rglob("*.h5"):
-            with h5py.File(p, 'r') as f:
+            with h5py.File(p, "r") as f:
                 # common metadata keys: 'patient_id', 'subject_id'
                 pid = None
-                for k in ('patient_id', 'subject_id', 'patientid'):
+                for k in ("patient_id", "subject_id", "patientid"):
                     if k in f.attrs:
                         pid = str(f.attrs[k])
                         break
@@ -105,8 +107,6 @@ def test_subject_split_consistency():
                     for pid in list(inter)[:10]:
                         files_a = split_files[a].get(pid, [])
                         files_b = split_files[b].get(pid, [])
-                        overlap_info.append(
-                            f"Subject ID: {pid}\n  {a} files: {files_a}\n  {b} files: {files_b}"
-                        )
+                        overlap_info.append(f"Subject ID: {pid}\n  {a} files: {files_a}\n  {b} files: {files_b}")
                     msg = f"Subject overlap between {a} and {b}:\n" + "\n".join(overlap_info)
                     assert False, msg

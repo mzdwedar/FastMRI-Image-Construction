@@ -50,25 +50,31 @@ class StopOnFirstImprovement(Callback):
             self.best_value = current_val
             return
         if self._is_improvement(current_val):
-            logging.info("Stopping on first improvement of %s: %.6f -> %.6f", self.monitor, self.best_value, current_val)
+            logging.info(
+                "Stopping on first improvement of %s: %.6f -> %.6f", self.monitor, self.best_value, current_val
+            )
             trainer.should_stop = True
         else:
             # update best if improved according to mode for subsequent comparisons
-            if (self.mode == "min" and current_val < self.best_value) or (self.mode == "max" and current_val > self.best_value):
+            if (self.mode == "min" and current_val < self.best_value) or (
+                self.mode == "max" and current_val > self.best_value
+            ):
                 self.best_value = current_val
+
 
 def train_fn(cfg: DictConfig) -> Dict:
     """Function to train the model"""
     pl.seed_everything(cfg.trainer.seeds)
-    checkpoint_config = ModelCheckpoint(monitor=cfg.trainer.checkpoint.monitor,
-                                        mode=cfg.trainer.checkpoint.mode,
-                                        save_top_k=cfg.trainer.checkpoint.top_k,
-                                        every_n_epochs=cfg.trainer.checkpoint.n_epochs,
-                                        dirpath=cfg.trainer.checkpoint.path,
-                                        filename=cfg.trainer.checkpoint.filename,
-                                        auto_insert_metric_name=False
-                                        )
-    
+    checkpoint_config = ModelCheckpoint(
+        monitor=cfg.trainer.checkpoint.monitor,
+        mode=cfg.trainer.checkpoint.mode,
+        save_top_k=cfg.trainer.checkpoint.top_k,
+        every_n_epochs=cfg.trainer.checkpoint.n_epochs,
+        dirpath=cfg.trainer.checkpoint.path,
+        filename=cfg.trainer.checkpoint.filename,
+        auto_insert_metric_name=False,
+    )
+
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
     callbacks = [checkpoint_config, lr_monitor]
@@ -80,23 +86,23 @@ def train_fn(cfg: DictConfig) -> Dict:
                 min_delta=cfg.trainer.stop_on_first_improvement.min_delta,
             )
         )
-    
+
     # Initialize MLflow logger with fallback to local file store if remote is inaccessible
     try:
         mlflow_logger = MLFlowLogger(
             experiment_name=cfg.trainer.train.experiment_name,
             tracking_uri=cfg.trainer.MLFLOW_TRACKING_URI,
-            log_model=False
+            log_model=False,
         )
     except MlflowException as exc:
-        print(f"Warning: Failed to connect to MLflow at {cfg.trainer.MLFLOW_TRACKING_URI} ({exc}). Falling back to local file store.")
+        print(
+            f"Warning: Failed to connect to MLflow at {cfg.trainer.MLFLOW_TRACKING_URI} ({exc}). Falling back to local file store."
+        )
         local_tracking_uri = f"file:{os.path.abspath('mlruns')}"
         mlflow_logger = MLFlowLogger(
-            experiment_name=cfg.trainer.train.experiment_name,
-            tracking_uri=local_tracking_uri,
-            log_model=False
+            experiment_name=cfg.trainer.train.experiment_name, tracking_uri=local_tracking_uri, log_model=False
         )
-    
+
     # variable-density random mask (accelerated factor 4, center fraction 0.08)
     mask_func = RandomMaskFunc(center_fractions=[0.08], accelerations=[4])
 
@@ -107,34 +113,43 @@ def train_fn(cfg: DictConfig) -> Dict:
         cfg.datamodule.test_root,
         mask_func,
         cfg.datamodule.batch_size,
-        cfg.datamodule.num_workers
+        cfg.datamodule.num_workers,
     )
 
-    model = UnetModel(cfg.trainer.train.optimizer.lr, cfg.trainer.train.optimizer.weight_decay,
-                      cfg.trainer.train.optimizer.name, cfg.model.num_chans,
-                      cfg.model.num_pools, cfg.trainer.train.scheduler
-                      )
-    
-    trainer = Trainer(accelerator=cfg.trainer.accelerator, devices=cfg.trainer.gpus,
-                      max_epochs=cfg.trainer.train.max_epochs, logger=mlflow_logger,
-                      strategy=cfg.trainer.train.strategy, callbacks=callbacks,
-                      )
-    
+    model = UnetModel(
+        cfg.trainer.train.optimizer.lr,
+        cfg.trainer.train.optimizer.weight_decay,
+        cfg.trainer.train.optimizer.name,
+        cfg.model.num_chans,
+        cfg.model.num_pools,
+        cfg.trainer.train.scheduler,
+    )
+
+    trainer = Trainer(
+        accelerator=cfg.trainer.accelerator,
+        devices=cfg.trainer.gpus,
+        max_epochs=cfg.trainer.train.max_epochs,
+        logger=mlflow_logger,
+        strategy=cfg.trainer.train.strategy,
+        callbacks=callbacks,
+    )
+
     trainer.fit(model, data_module)
 
-    hparams = {"lr": cfg.trainer.train.optimizer.lr,
-               "weight_decay": cfg.trainer.train.optimizer.weight_decay,
-               "optimizer_name": cfg.trainer.train.optimizer.name,
-               "num_chans": cfg.model.num_chans,
-               "num_pools": cfg.model.num_pools, 
-               "dropout": cfg.model.dropout,
-               "batch_size": cfg.datamodule.batch_size, 
-               "max_epochs": cfg.trainer.train.max_epochs,
-               "accelerator": cfg.trainer.accelerator, 
-               "devices": cfg.trainer.gpus,
-               "strategy": cfg.trainer.train.strategy
-               }
-    
+    hparams = {
+        "lr": cfg.trainer.train.optimizer.lr,
+        "weight_decay": cfg.trainer.train.optimizer.weight_decay,
+        "optimizer_name": cfg.trainer.train.optimizer.name,
+        "num_chans": cfg.model.num_chans,
+        "num_pools": cfg.model.num_pools,
+        "dropout": cfg.model.dropout,
+        "batch_size": cfg.datamodule.batch_size,
+        "max_epochs": cfg.trainer.train.max_epochs,
+        "accelerator": cfg.trainer.accelerator,
+        "devices": cfg.trainer.gpus,
+        "strategy": cfg.trainer.train.strategy,
+    }
+
     metrics = {
         k: (float(v.detach().cpu().item()) if hasattr(v, "detach") else float(v))
         for k, v in trainer.callback_metrics.items()
@@ -158,10 +173,11 @@ def train_fn(cfg: DictConfig) -> Dict:
         "params": hparams,
         "metrics": metrics,
     }
-    
+
     return d
 
-@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name='config')
+
+@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name="config")
 def main(cfg: DictConfig):
     """Main train function to train our model"""
     logging.info("\n" + OmegaConf.to_yaml(cfg))
@@ -172,7 +188,8 @@ def main(cfg: DictConfig):
     if results_fp:  # pragma: no cover, saving results`
         utils.save_dict(results, results_fp)
 
-    return results['metrics']
+    return results["metrics"]
+
+
 if __name__ == "__main__":
-    main() # pylint: disable=no-value-for-parameter
-    
+    main()  # pylint: disable=no-value-for-parameter
