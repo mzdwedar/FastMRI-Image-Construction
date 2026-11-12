@@ -1,0 +1,37 @@
+# U-Net reconstruction, ONNX Runtime on CPU, with server-side dynamic batching.
+# One request = one or more 320x320 magnitude slices; Triton merges concurrent
+# requests into a single forward pass of up to max_batch_size slices.
+name: "unet_model"
+platform: "onnxruntime_onnx"
+max_batch_size: 16
+
+input [
+  {
+    name: "input"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]  # C, H, W (batch dim is implicit)
+  }
+]
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]
+  }
+]
+
+version_policy { specific { versions: [ 3 ] } }
+
+instance_group [ { kind: KIND_CPU, count: 1 } ]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16 ]
+  max_queue_delay_microseconds: 2000  # wait up to this long to fill a batch
+}
+
+# Match the container's CPU allocation; ORT otherwise sizes its pool to the host
+parameters { key: "intra_op_thread_count" value: { string_value: "4" } }
+parameters { key: "inter_op_thread_count" value: { string_value: "1" } }
+
+# No response cache: real MRI slices are never byte-identical, and a cache would
+# only inflate load-test numbers.

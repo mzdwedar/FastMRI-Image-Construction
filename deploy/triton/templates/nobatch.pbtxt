@@ -1,0 +1,27 @@
+# Same model and threads as unet_model, without dynamic batching: the baseline that
+# shows what server-side batching buys under concurrent single-slice requests.
+name: "${model_name}"
+platform: "onnxruntime_onnx"
+max_batch_size: 16
+
+input [
+  {
+    name: "input"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]
+  }
+]
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ 1, 320, 320 ]
+  }
+]
+
+version_policy { specific { versions: [ ${version} ] } }
+
+instance_group [ { kind: KIND_CPU, count: ${instances} } ]
+
+parameters { key: "intra_op_thread_count" value: { string_value: "${intra_threads}" } }
+parameters { key: "inter_op_thread_count" value: { string_value: "${inter_threads}" } }
