@@ -322,6 +322,12 @@ task that needs them is reached.
   - Deps: C4, P6 · Files: `tests/e2e/test_promotion.py`
 
 ### ✅ Checkpoint: Gateway — SPEC.md system criteria 1, 2, 6 pass; Triton-kill test (in-flight get 503/504, recovers); human review
+  - Run 2026-11-12 on `main` after #27-#29, real stack (`make up-dev`, random-init models; the gateway image was already built, so the 10 min bound is not a cold-build figure):
+    - Criterion 1: `make setup api-key up-dev model-random promote` → `/readyz` 200 in 27 s; `curl` of `/v1/reconstructions` with a synthetic 8-slice `.h5` → 200, (8, 320, 320) finite.
+    - Criterion 2: 4 closed-loop clients on `/v1/infer` during `make promote VERSION=2` (11.5 s) and `make rollback`: 288 requests, all 200, `X-Model-Version` went 1 → 2 → 1; gateway and Triton were not restarted.
+    - Criterion 6: image 110 MB, `import torch` fails.
+    - Triton kill (6 clients, `docker compose kill triton`, then `start`): `/readyz` 503 after 1 s, `/healthz` stays 200; requests during the outage 187 × 503 (max 0.32 s, no hangs, no 5xx other than 503); after restart `/readyz` 200 within 4 s and requests succeed again; no tracebacks in the gateway log.
+    - Not done: the human review. Criteria 3-5 belong to later checkpoints.
 
 ---
 
