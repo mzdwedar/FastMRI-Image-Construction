@@ -1,0 +1,6 @@
+# Debug/benchmark overlay: publishes Triton HTTP and gRPC on the host (`make up-dev`).
+services:
+  triton:
+    ports:
+      - "8100:8000"
+      - "8101:8001"

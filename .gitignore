@@ -236,3 +236,6 @@ results/
 preds/
 triton_models/
 latest_version.txt
+
+# Triton model repository, materialized from the MLflow registry by `make sync`
+/deploy/model_repository/
