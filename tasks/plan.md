@@ -78,6 +78,7 @@ F5,F7 → K1 → K2 (Colab, manual);  P2,K1 → K3;  K2,C1 → K4;  F8,K2,K3 →
 | GitHub-hosted runners too slow for full Compose e2e within 15 min | Med | Pre-pull images with cache, CPU-light random-init model, shortened alert `for:` via test override; measure in C4 |
 | Benchmark noise on shared runners | Low | `bench.yml` advisory with 30% threshold; local `make bench` required for batching changes |
 | Colab sessions disconnect; Drive FUSE is slow for h5 reads | Med | Resume from `last.ckpt` on Drive (K1); copy data to `/content` at start (K2) |
+| VS Code Colab kernel: remote runtime can't see local changes; `drive.mount` may behave differently than in the browser | Med | Install from a pushed sha with a notebook check that it exists on the remote; K2 verifies `drive.mount` first and records a fallback |
 | Colab Python/torch/CUDA drift from the local lockfile | Med | Install at a pinned git sha; `requires-python` covers Colab's version (Q2); torch/CUDA recorded in `run_summary.json` |
 | Scope creep (16 services in Compose) | Med | Each new service needs spec approval (Ask first); observability services behind a Compose profile if dev startup > 2 min |
 

@@ -453,14 +453,18 @@ you (manual check) and everything testable is covered locally on synthetic data.
   - Verify: `uv run pytest tests/unit/test_train_summary.py`.
   - Deps: F5, F7, Q2 · Files: `src/fastmri_knee/train.py`, `configs/trainer.yaml`, `configs/datamodule.yaml`, `tests/unit/test_train_summary.py`
 
-- [ ] **K2: Colab training notebook** — S
-  - Do: `notebooks/train_colab.ipynb`: parameter cell (git sha, Drive paths, epochs, batch size), GPU check, mount
-    Drive, `pip install "fastmri-knee[train] @ git+https://github.com/mzdwedar/fastmri@<sha>"`, copy data from Drive
+- [ ] **K2: Colab training notebook (run from VS Code)** — S
+  - Context: you open the repo notebook in VS Code and connect it to a Colab GPU kernel with the Google Colab
+    extension. The kernel is remote: it can't see local files or uncommitted changes, so it installs the package
+    from a pushed commit, and outputs come back via Drive.
+  - Do: first verify `google.colab.drive.mount` works under the VS Code kernel (if not, record the fallback, e.g.
+    `google.colab.auth` + Drive API or rclone, in `docs/training-colab.md`); then `notebooks/train_colab.ipynb`:
+    parameter cell (git sha, Drive paths, epochs, batch size), GPU check, sha-is-pushed check, mount Drive, `pip install "fastmri-knee[train] @ git+https://github.com/mzdwedar/fastmri@<sha>"`, copy data from Drive
     to `/content` (Drive FUSE is slow for h5 random reads), run `python -m fastmri_knee.train …`, outputs to Drive;
     `docs/training-colab.md` with the steps. Outputs stripped before commit.
   - Acceptance: smoke run (1 epoch, small `num_samples`) on a Colab GPU writes `best.ckpt` + `run_summary.json` to Drive.
   - Verify: manual — you run it on Colab and share the summary.
-  - Deps: K1, Q17, Q18, S11 · Files: `notebooks/train_colab.ipynb`, `docs/training-colab.md`
+  - Deps: K1, Q17, Q18, S4 (commit must be pushed), S11 · Files: `notebooks/train_colab.ipynb`, `docs/training-colab.md`
 
 - [ ] **K3: Register a Colab run locally** — S
   - Do: `register --checkpoint … --summary …` (`make register CKPT=… SUMMARY=…`); refuse on checkpoint hash or
@@ -635,8 +639,9 @@ so the decision isn't lost.
   - Do: require PRs, linear history, and the required checks listed in SPEC-ci-cd (GitHub Settings → Branches).
   - Trigger: C8
 
-- [ ] **S11: Colab and Google Drive**
-  - Do: pick a Colab tier (free T4 has session limits; Pro gives longer sessions/A100); make sure Drive has space for
+- [ ] **S11: Colab (via VS Code) and Google Drive**
+  - Do: install the official Google Colab extension in VS Code and sign in (Command Palette → "Google Colab: Sign
+    In"); confirm you can pick a GPU runtime (T4) from the notebook kernel picker; pick a Colab tier (free T4 has session limits; Pro gives longer sessions/A100); make sure Drive has space for
     the dataset subset (Q18) and checkpoints; upload data to `MyDrive/fastmri/{train,val,test}`; download one real
     val `.h5` into local `data/val/` for F2 and realistic local tests.
   - Trigger: F2 (one file), K2 (full setup)

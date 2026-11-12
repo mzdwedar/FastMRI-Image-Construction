@@ -49,7 +49,8 @@ correct and usable without torch (the gateway depends on this).
     include Colab's Python version. Paths (data, checkpoints, outputs) are Hydra overrides pointing to Drive;
     `accelerator: auto`. Every run writes `run_summary.json` next to the best checkpoint (git sha,
     `preprocess_version`, hyperparameters, val metrics, checkpoint sha256) for registration (SPEC-model-packaging).
-    `notebooks/train_colab.ipynb` is the supported entry point.
+    `notebooks/train_colab.ipynb` is the supported entry point, opened in VS Code and run on a Colab kernel via the
+    Google Colab extension. The kernel can't see the local workspace, so code reaches it only through a pushed commit.
 11. **Tooling.** ruff (`E,F,I,B,UP,SIM`) + `ruff format` replaces black; mypy strict for `preprocess.py` (and
     later `gateway/`, `packaging/`); pre-commit with ruff and gitleaks. `.env.example` documents every variable.
 
