@@ -314,7 +314,12 @@ task that needs them is reached.
   - Acceptance/Verify: `make test test-integration` green; coverage ≥ 85% on `gateway/`.
   - Deps: G6 · Files: `tests/integration/test_gateway.py`, `tests/unit/gateway/test_openapi.py`, `tests/unit/openapi.json`, `tests/integration/test_image.py`
 
-- [ ] **C4: e2e job and first e2e test** — M
+- [x] **C4: e2e job and first e2e test** — M · done 2026-11-12: green in 446 s (9 passed: 4 smoke + 5 observability, 0
+  skipped; limit 12 min). Drill: renaming `/v1/reconstructions` failed `e2e` (smoke test failed, 3 observability tests
+  errored at setup on 404; run 43257376861) and `integration` too. Notes: `make ci-e2e` brings up the whole stack
+  (O11's tests need Prometheus/Loki/Tempo/Grafana/Alloy/alert-sink). Linux gap: `make api-key` writes 0600, so the
+  gateway container (uid 10001) cannot read it from the bind mount; `ci-e2e` chmods 644 as a workaround, the app default
+  is unchanged (your call). Remaining for you: add `e2e` to required checks (S10).
   - Do: `make ci-e2e` (build, up --wait, model-random, promote, test-e2e, down -v); `tests/e2e/test_smoke.py`
     (reconstruct a synthetic volume); upload compose logs on failure; measure wall time.
   - Acceptance: e2e green in CI ≤ 12 min.

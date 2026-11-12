@@ -83,7 +83,7 @@ jobs:
       # e2e tests, and always runs `down -v` (saving compose logs to e2e-logs/ first when it failed).
       - name: make ci-e2e (a skipped test fails the job)
         env:
-          PYTEST_ADDOPTS: -rs
+          PYTEST_ADDOPTS: -rfEs  # -r replaces pytest's default fE summary, so keep failures and errors listed
         run: |
           set -o pipefail
           start=$(date +%s)
