@@ -8,3 +8,10 @@ datasources:
     url: http://loki:3100
     jsonData:
       maxLines: 1000
+      # log line -> trace: the access log's trace_id field opens the trace in Tempo
+      derivedFields:
+        - name: trace_id
+          matcherRegex: '"trace_id": "(\w+)"'
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+          urlDisplayLabel: Open trace

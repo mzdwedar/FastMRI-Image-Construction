@@ -1,6 +1,6 @@
 // Docker log discovery -> Loki. Labels are `service` and `level` only (bounded cardinality);
 // request_id, route, status etc. stay in the JSON line and are queried with `| json`.
-// O8 adds the OTLP receiver -> Tempo pipeline to this file.
+// Traces: OTLP from the gateway (gRPC :4317) and Triton (HTTP :4318) -> tail sampling -> Tempo (bottom of file).
 
 discovery.docker "containers" {
 	host = "unix:///var/run/docker.sock"
@@ -52,5 +52,76 @@ loki.process "logs" {
 loki.write "default" {
 	endpoint {
 		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+// ---- Traces ----------------------------------------------------------------------------------------------------
+// The gateway exports every span and Triton traces every request (it ignores the sampled flag, O9), so this is where
+// traces are kept or dropped, as whole traces: all errors, everything slower than 2 s, and TRACE_SAMPLE_PERCENT of
+// the rest (100 in dev, 10 by default). Spans of one trace arrive from two services, hence the wait before deciding.
+
+otelcol.receiver.otlp "traces" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		traces = [otelcol.processor.tail_sampling.keep.input]
+	}
+}
+
+otelcol.processor.tail_sampling "keep" {
+	decision_wait = "10s"
+	num_traces    = 5000
+
+	policy {
+		name = "errors"
+		type = "status_code"
+
+		status_code {
+			status_codes = ["ERROR"]
+		}
+	}
+
+	policy {
+		name = "slow"
+		type = "latency"
+
+		latency {
+			threshold_ms = 2000
+		}
+	}
+
+	policy {
+		name = "share"
+		type = "probabilistic"
+
+		probabilistic {
+			sampling_percentage = coalesce(env("TRACE_SAMPLE_PERCENT"), "10")
+		}
+	}
+
+	output {
+		traces = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		traces = [otelcol.exporter.otlp.tempo.input]
+	}
+}
+
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "tempo:4317"
+
+		tls {
+			insecure = true
+		}
 	}
 }
