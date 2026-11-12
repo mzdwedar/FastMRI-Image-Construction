@@ -22,7 +22,8 @@ test: ## Unit tests (no Docker, no data)
 test-integration: ## Tests that need Docker (real Triton)
 	uv run pytest -m integration
 
-test-e2e: ## Tests against the running Compose stack
+test-e2e: ## Observability e2e against the running stack (make up-dev + a promoted model; needs E2E_API_KEY)
+	TRACE_SAMPLE_PERCENT=100 docker compose up -d alloy
 	uv run pytest -m e2e
 
 ci: lint typecheck test ## What CI runs (lint, typecheck, unit tests)

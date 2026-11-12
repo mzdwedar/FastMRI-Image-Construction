@@ -428,10 +428,21 @@ task that needs them is reached.
     links in the UI. Model dashboard stays with M5.
   - Deps: O1, O3 · Files: `monitoring/grafana/build_dashboards.py`, `monitoring/grafana/dashboards/*.json`, `monitoring/grafana/provisioning/dashboards/dashboards.yml`, `Makefile`
 
-- [ ] **O11: Observability e2e tests** — M
+- [x] **O11: Observability e2e tests** — M
   - Do: e2e: 10 requests → counter ≥ 10; Loki has the log for a known request_id; Tempo has its trace; stop Triton →
     `TritonDown` at alert-sink ≤ 2 min, `/readyz` 503 ≤ 10 s; every dashboard query returns no error.
   - Acceptance/Verify: `make test-e2e` green locally and in CI.
+  - **Done (2026-11-12):** five tests, `make test-e2e` green twice in a row against the local stack (about 2 min):
+    10 requests raise `gateway_requests_total` by at least 10; Loki returns the log line for a known `request_id`
+    (and no filename); Tempo returns the trace by id (gateway spans and Triton `InferRequest`/`compute`) and by
+    `request_id`; all 36 dashboard queries succeed and Grafana lists the three provisioned dashboards; stopping Triton
+    turns `/readyz` 503 within 10 s and `TritonDown` reaches `alert-sink` (compose exec, port not published), then
+    Triton is restarted. Needs `E2E_API_KEY` and a running `make up-dev` stack with a promoted model; `make test-e2e`
+    sets Alloy to `TRACE_SAMPLE_PERCENT=100`. Findings: `/readyz` is per gunicorn worker, so after a restart one worker
+    can say 200 while another still answers 503; the tests wait for 8 inferences in a row instead. A stale Grafana
+    bind mount after a branch switch left no dashboards loaded; the test caught it (recreate grafana).
+    **Not done:** "in CI". There is no e2e job yet, that is C4 (it must start the stack, mint a key and promote a
+    model, then run these).
   - Deps: O4, O8, O10 · Files: `tests/e2e/test_observability.py`, `tests/e2e/conftest.py`
 
 - [ ] **C5: Configs job in CI** — S
