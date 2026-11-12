@@ -100,6 +100,23 @@ HADOLINT_IMAGE ?= hadolint/hadolint:v2.12.0
 hadolint: ## Lint every Dockerfile (needs Docker)
 	@for f in $$(git ls-files '*Dockerfile*'); do echo "hadolint $$f"; docker run --rm -i $(HADOLINT_IMAGE) < $$f || exit 1; done
 
+ci-e2e: ## What e2e.yml runs: build, up (whole stack), model-random, promote, test-e2e, down -v (always)
+	@mkdir -p secrets deploy/model_repository
+	@# fresh key per run: the hash file is replaced, the plaintext key only lives in this shell
+	@rm -f secrets/api_keys
+	@# api-key writes 0600; on Linux the bind mount keeps that mode and the gateway (uid 10001) cannot read it,
+	@# so the hash file is made readable here (hashes only, throwaway runner)
+	@set -e; \
+	export COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml; \
+	trap 'rc=$$?; if [ $$rc -ne 0 ]; then mkdir -p e2e-logs; docker compose logs --no-color > e2e-logs/compose.log 2>&1 || true; fi; docker compose down -v' EXIT; \
+	export E2E_API_KEY=$$($(MAKE) -s api-key); \
+	test -n "$$E2E_API_KEY"; \
+	chmod 644 secrets/api_keys; \
+	docker compose up -d --build --wait; \
+	$(MAKE) model-random; \
+	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
+	$(MAKE) test-e2e
+
 down: ## Stop the Compose stack
 	docker compose down
 
@@ -113,4 +130,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
