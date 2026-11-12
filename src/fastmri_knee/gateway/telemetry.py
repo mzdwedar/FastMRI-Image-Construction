@@ -6,13 +6,20 @@ default in-process registry is used (tests, single process).
 
 Labels are bounded: `route` is the matched path template (or "unmatched"), never the raw path; no request ids,
 filenames or keys.
+
+Tracing (SPEC-observability, "Traces"): `setup_tracing` instruments the app and points `span()` at a provider. The
+gateway exports every span and does not head-sample: the keep/drop decision (errors, slow requests, a probabilistic
+share) is made in Alloy's tail sampling, which also sees Triton's spans (Triton ignores the sampled flag, see O9).
+Without a provider `span()` is a no-op, so tests and a gateway with no OTLP endpoint pay nothing.
 """
 
 import os
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
@@ -24,6 +31,10 @@ from prometheus_client import (
     multiprocess,
 )
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from opentelemetry.sdk.trace import TracerProvider
 
 DURATION_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0)
 UPLOAD_BUCKETS = tuple(float(1 << n) for n in range(10, 31, 2))  # 1 KiB ... 1 GiB
@@ -79,6 +90,10 @@ MODEL_INFO = Gauge(
     multiprocess_mode="livemax",
 )
 
+TRACER_NAME = "fastmri_knee.gateway"
+UNTRACED_PATHS = "healthz,readyz,metrics"  # probes and scrapes would be most of the spans and none of the signal
+_tracer: trace.Tracer = trace.NoOpTracer()
+
 _served: dict[str, str] = {}  # this process's currently published model_info labels
 
 
@@ -115,6 +130,49 @@ def set_model_state(ready: bool, version: str | None, preprocess_version: str) -
         MODEL_INFO.labels(old, preprocess_version).set(0)
     MODEL_INFO.labels(version, preprocess_version).set(1)
     _served["version"] = version
+
+
+@contextmanager
+def span(name: str, **attributes: Any) -> Iterator[trace.Span]:
+    """A child span of the current one (an error inside marks it as failed). Attributes must be bounded and
+    never carry filenames, keys or payload values."""
+    with _tracer.start_as_current_span(name, attributes=attributes or None) as sp:
+        yield sp
+
+
+def setup_tracing(app: "FastAPI", provider: "TracerProvider") -> None:
+    """Instrument `app` (one server span per request, probes excluded) and route `span()` to `provider`.
+
+    Instrumentation wraps the whole middleware stack, so the trace context is active in `AccessLogMiddleware`
+    and the access-log line carries the request's `trace_id`.
+    """
+    global _tracer
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    _tracer = provider.get_tracer(TRACER_NAME)
+    # receive/send spans are one per body chunk (about 170 for a 3-slice upload) and say nothing the server span lacks
+    FastAPIInstrumentor.instrument_app(
+        app, tracer_provider=provider, excluded_urls=UNTRACED_PATHS, exclude_spans=["receive", "send"]
+    )
+
+
+def disable_tracing() -> None:
+    """Make `span()` a no-op again (a new app without a provider must not keep exporting to an old one)."""
+    global _tracer
+    _tracer = trace.NoOpTracer()
+
+
+def otlp_provider(endpoint: str) -> "TracerProvider":
+    """Tracer provider that exports every span over OTLP/gRPC. Built per worker, after the fork: the batch
+    exporter owns a thread that would not survive a fork."""
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    provider = TracerProvider(resource=Resource.create({"service.name": "gateway"}))
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=True)))
+    return provider
 
 
 def render() -> tuple[bytes, str]:

@@ -22,7 +22,8 @@ test: ## Unit tests (no Docker, no data)
 test-integration: ## Tests that need Docker (real Triton)
 	uv run pytest -m integration
 
-test-e2e: ## Tests against the running Compose stack
+test-e2e: ## Observability e2e against the running stack (make up-dev + a promoted model; needs E2E_API_KEY)
+	TRACE_SAMPLE_PERCENT=100 docker compose up -d alloy
 	uv run pytest -m e2e
 
 ci: lint typecheck test ## What CI runs (lint, typecheck, unit tests)
@@ -67,6 +68,7 @@ PROM_IMAGE ?= prom/prometheus:v2.54.1
 AM_IMAGE ?= prom/alertmanager:v0.27.0
 LOKI_IMAGE ?= grafana/loki:3.1.1
 ALLOY_IMAGE ?= grafana/alloy:v1.3.1
+TEMPO_IMAGE ?= grafana/tempo:2.5.0
 
 check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and Alertmanager config (needs Docker)
 	docker compose config -q
@@ -83,25 +85,29 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 		-config.file=/etc/loki/config.yml -verify-config
 	docker run --rm -v "$(CURDIR)/monitoring/alloy/config.alloy:/c.alloy:ro" $(ALLOY_IMAGE) fmt /c.alloy | diff -u monitoring/alloy/config.alloy - \
 		|| { echo "config.alloy is not formatted/parsable: run alloy fmt"; exit 1; }
+	docker run --rm -v "$(CURDIR)/monitoring/tempo/config.yml:/etc/tempo/config.yml:ro" $(TEMPO_IMAGE) \
+		-config.file=/etc/tempo/config.yml -config.verify=true
 	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
 	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
 		-c 'for u in "" https://hooks.invalid/T/B/x; do SLACK_WEBHOOK_URL=$$u sh /cfg/render.sh --check /tmp/am.yml && amtool check-config /tmp/am.yml || exit 1; done'
 
-E2E_COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+dashboards: ## Regenerate the Grafana dashboard JSON (CI fails if the committed files differ)
+	uv run python monitoring/grafana/build_dashboards.py
 
-ci-e2e: ## What e2e.yml runs: build, up, model-random, promote, test-e2e, down -v (always)
+ci-e2e: ## What e2e.yml runs: build, up (whole stack), model-random, promote, test-e2e, down -v (always)
 	@mkdir -p secrets deploy/model_repository
 	@# fresh key per run: the hash file is replaced, the plaintext key only lives in this shell
 	@rm -f secrets/api_keys
 	@# api-key writes 0600; on Linux the bind mount keeps that mode and the gateway (uid 10001) cannot read it,
 	@# so the hash file is made readable here (hashes only, throwaway runner)
 	@set -e; \
-	trap 'rc=$$?; if [ $$rc -ne 0 ]; then mkdir -p e2e-logs; $(E2E_COMPOSE) logs --no-color > e2e-logs/compose.log 2>&1 || true; fi; $(E2E_COMPOSE) down -v' EXIT; \
+	export COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml; \
+	trap 'rc=$$?; if [ $$rc -ne 0 ]; then mkdir -p e2e-logs; docker compose logs --no-color > e2e-logs/compose.log 2>&1 || true; fi; docker compose down -v' EXIT; \
 	export E2E_API_KEY=$$($(MAKE) -s api-key); \
 	test -n "$$E2E_API_KEY"; \
 	chmod 644 secrets/api_keys; \
-	$(E2E_COMPOSE) up -d --build --wait mlflow triton gateway; \
+	docker compose up -d --build --wait; \
 	$(MAKE) model-random; \
 	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
 	$(MAKE) test-e2e
@@ -119,4 +125,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs down data train clean
+.PHONY: help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards down data train clean

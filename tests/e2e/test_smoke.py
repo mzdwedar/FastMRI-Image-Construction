@@ -3,6 +3,7 @@
 import io
 
 import h5py
+import httpx
 import numpy as np
 import pytest
 
@@ -13,8 +14,8 @@ pytestmark = pytest.mark.e2e
 SLICES = 3
 
 
-def test_requires_an_api_key(anonymous, gateway):
-    assert anonymous.get("/v1/model").status_code == 401
+def test_requires_an_api_key(stack, gateway):
+    assert httpx.get(f"{stack['gateway']}/v1/model", timeout=10).status_code == 401
 
 
 def test_model_endpoint(gateway):
