@@ -138,7 +138,10 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_register.py`.
   - Deps: F5, F7 · Files: `src/fastmri_knee/packaging/{registry,card,__main__}.py`, `tests/unit/packaging/test_register.py`
 
-- [ ] **P3: `make model-random`** — S
+- [x] **P3: `make model-random`** — S
+  - Done 2026-11-12: `register --random-init` (`register_random`), `make model-random` (`MLFLOW_TRACKING_URI` defaults to
+    `http://localhost:5001`). 2 new unit tests; run against a fresh Compose MLflow: version 1 tagged `random_init=true`.
+    Blocking random-init from the `production` alias (`--allow-random`) belongs to `promote`.
   - Do: register untrained weights tagged `random_init=true`; Makefile target.
   - Acceptance: works with no dataset; version tagged.
   - Verify: unit test; `make model-random` against Compose MLflow.

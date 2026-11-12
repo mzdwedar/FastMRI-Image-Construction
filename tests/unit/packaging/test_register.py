@@ -7,7 +7,7 @@ from mlflow.tracking import MlflowClient
 
 from fastmri_knee.packaging import registry
 from fastmri_knee.packaging.card import sha256_file
-from fastmri_knee.packaging.registry import MODEL_NAME, RegistryError, register
+from fastmri_knee.packaging.registry import MODEL_NAME, RegistryError, register, register_random
 from fastmri_knee.preprocess import PREPROCESS_VERSION
 
 CARD_FIELDS = {
@@ -82,3 +82,16 @@ def test_summary_hash_mismatch_refuses(store, checkpoint):
 def test_summary_preprocess_version_mismatch_refuses(store, checkpoint):
     with pytest.raises(RegistryError, match="preprocess_version"):
         register(checkpoint, tracking_uri=store, summary=summary_for(checkpoint, preprocess_version="999"))
+
+
+def test_register_random_needs_no_checkpoint_and_is_tagged(store):
+    version = register_random(tracking_uri=store)
+    tags = MlflowClient().get_model_version(MODEL_NAME, str(version)).tags
+    assert tags["random_init"] == "true" and tags["preprocess_version"] == PREPROCESS_VERSION
+    card = json.loads(Path(fetch(version, "model_card.json")).read_text())
+    assert card["source"] == "random-init" and card["val_metrics"] == {}
+
+
+def test_trained_registration_has_no_random_init_tag(store, checkpoint):
+    version = register(checkpoint, tracking_uri=store)
+    assert "random_init" not in MlflowClient().get_model_version(MODEL_NAME, str(version)).tags

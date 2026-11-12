@@ -15,7 +15,7 @@ from mlflow.tracking import MlflowClient
 
 from fastmri_knee.model import UnetModel
 from fastmri_knee.packaging import card as card_mod
-from fastmri_knee.packaging.export import INPUT_SHAPE, check_parity, export
+from fastmri_knee.packaging.export import INPUT_SHAPE, check_parity, export, random_init_checkpoint
 from fastmri_knee.preprocess import PREPROCESS_VERSION
 
 MODEL_NAME = "fastmri-unet"
@@ -48,6 +48,7 @@ def register(
     summary: dict[str, Any] | None = None,
     run_id: str | None = None,
     source: str = "local",
+    extra_tags: dict[str, str] | None = None,
 ) -> int:
     """Return the new registry version number. Raises RegistryError on any refusal."""
     if tracking_uri:
@@ -109,4 +110,14 @@ def register(
 
     client.set_model_version_tag(MODEL_NAME, str(version), "preprocess_version", PREPROCESS_VERSION)
     client.set_model_version_tag(MODEL_NAME, str(version), "git_sha", model_card["git_sha"])
+    for key, value in (extra_tags or {}).items():
+        client.set_model_version_tag(MODEL_NAME, str(version), key, value)
     return version
+
+
+def register_random(*, tracking_uri: str | None = None) -> int:
+    """Register an untrained model tagged random_init=true (CI, tests, benchmarks; needs no dataset)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint = Path(tmp) / "model.ckpt"
+        random_init_checkpoint(checkpoint)
+        return register(checkpoint, tracking_uri=tracking_uri, source="random-init", extra_tags={"random_init": "true"})
