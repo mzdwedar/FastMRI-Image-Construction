@@ -159,16 +159,19 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/packaging/test_render.py`.
   - Deps: F5 · Files: `deploy/triton/templates/*.pbtxt`, `src/fastmri_knee/packaging/triton_repo.py`, `tests/unit/packaging/test_render.py`, `tests/unit/packaging/golden/*`
 
-- [ ] **T1: Triton explicit mode on an empty repo (+ arm64 spike)** — S
-  - Status 2026-11-12: implemented, live check PENDING. Compose `triton` now runs explicit mode on `deploy/model_repository`
-    (ro, gitignored, `make up` creates it), `TRITON_IMAGE/CPUS/MEM` in `.env.example`, `restart: unless-stopped`, healthcheck on
-    `/v2/health/live` (ready is 503 until `sync`), no host ports; `make up-dev` + `docker-compose.dev.yml` publish 8100/8101
-    (an override file instead of a `dev` profile: a profile can't remove ports from the same service). Legacy
-    `deploy/services/triton/models/` removed; `export.py` writes to `artifacts/onnx/unet_model` by default. Tracing flags wait for O-tasks.
-  - arm64 spike: `nvcr.io/nvidia/tritonserver` 24.08, 25.06, 25.10, 26.01, 26.03, 26.05 py3 tags all list amd64 and arm64
-    manifests (registry API, anonymous token), so no emulation fallback is needed on Apple Silicon. Not yet run natively.
-  - Blocked: `docker pull` of the image returns 401 from nvcr.io (stale stored `nvcr.io` login in Docker Desktop). Needs
-    `docker logout nvcr.io`, then `make up` and the 503 check below.
+- [x] **T1: Triton explicit mode on an empty repo (+ arm64 spike)** — S
+  - Done 2026-11-12. Compose `triton` runs explicit mode on `deploy/model_repository` (ro, gitignored, `make up` creates
+    it), `TRITON_IMAGE/CPUS/MEM` in `.env.example`, `restart: unless-stopped`, healthcheck on `/v2/health/live`, no host
+    ports; `make up-dev` + `docker-compose.dev.yml` publish 8100/8101 (an override file, not a `dev` profile: a profile
+    can't remove ports from the same service). Legacy `deploy/services/triton/models/` removed; `export.py` writes to
+    `artifacts/onnx/unet_model` by default. Tracing flags wait for the O-tasks.
+  - Verified natively on arm64 (24.08-py3 image is arm64, 7.4 GB): empty repo → server starts, live 200, container
+    healthy, limits 4 CPU / 4 GiB. **Finding: server `/v2/health/ready` is 200 on an empty repo** (strict-readiness only
+    fails for a registered-but-unready model), not the 503 this task assumed. The correct not-ready signal is
+    `/v2/models/unet_model/ready` (400 until loaded); the gateway and `sync` must use it. Also checked: a rendered cpu config
+    plus random-init ONNX loads via `POST /v2/repository/models/unet_model/load` → `versions/1/ready` 200.
+  - arm64 spike: tags 24.08, 25.06, 25.10, 26.01, 26.03, 26.05 py3 all list amd64 and arm64 manifests; no emulation fallback.
+    Pull needed `docker logout nvcr.io` (stale stored login gave 401).
   - Do: check native arm64 manifest for the pinned tag (record result); flags per SPEC-inference-server §1;
     mount `deploy/model_repository` read-only; `TRITON_IMAGE/CPUS/MEM` in `.env`; `dev` profile publishes 8100/8101;
     default profile publishes none.
