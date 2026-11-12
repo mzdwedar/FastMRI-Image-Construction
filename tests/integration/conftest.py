@@ -77,3 +77,88 @@ def registry(tmp_path_factory):
 
 def version_ready(url: str, version: int) -> bool:
     return httpx.get(f"{url}/v2/models/{MODEL}/versions/{version}/ready", timeout=5).status_code == 200
+
+
+# --- gateway tests: a Triton with gRPC published on fixed ports, so it can be stopped and restarted ---------------
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+class GatewayTriton:
+    """A Triton serving random-init `unet_model` v1 from its own repository. `stop()`/`start()` keep the ports."""
+
+    def __init__(self, name: str, grpc_port: int, http_port: int, onnx: "os.PathLike[str]"):
+        self.name, self.grpc_port, self.http_port, self.onnx = name, grpc_port, http_port, onnx
+
+    @property
+    def grpc_url(self) -> str:
+        return f"127.0.0.1:{self.grpc_port}"
+
+    def wait_ready(self, timeout_s: float = 90) -> None:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            try:
+                if (
+                    httpx.get(f"http://127.0.0.1:{self.http_port}/v2/models/{MODEL}/ready", timeout=2).status_code
+                    == 200
+                ):
+                    return
+            except httpx.HTTPError:
+                pass
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"Triton not ready after {timeout_s}s:\n{_docker('logs', self.name).stdout[-2000:]}")
+            time.sleep(1)
+
+    def stop(self) -> None:
+        assert _docker("stop", "-t", "1", self.name).returncode == 0
+
+    def start(self) -> None:
+        assert _docker("start", self.name).returncode == 0
+        self.wait_ready()
+
+
+@pytest.fixture(scope="session")
+def gateway_onnx(tmp_path_factory):
+    """A random-init U-Net exported to ONNX; also the reference the gateway output is compared with."""
+    from fastmri_knee.packaging.export import export
+
+    d = tmp_path_factory.mktemp("gateway_model")
+    module = random_init_checkpoint(d / "model.ckpt")
+    export(module, d / "model.onnx")
+    return d / "model.onnx"
+
+
+@pytest.fixture(scope="session")
+def gateway_triton(gateway_onnx, tmp_path_factory):
+    from fastmri_knee.packaging.triton_repo import render
+
+    if shutil.which("docker") is None or _docker("info").returncode != 0:
+        pytest.skip("Docker is not available")
+    if _docker("image", "inspect", TRITON_IMAGE).returncode != 0:
+        pytest.skip(f"{TRITON_IMAGE} is not present locally (docker pull it, or set TRITON_IMAGE)")
+    repo = tmp_path_factory.mktemp("gateway_repo")
+    (repo / MODEL / "1").mkdir(parents=True)
+    shutil.copy(gateway_onnx, repo / MODEL / "1" / "model.onnx")
+    (repo / MODEL / "config.pbtxt").write_text(render("cpu", version=1, threads=2))
+    for p in [repo, *repo.rglob("*")]:
+        p.chmod(0o755)
+    triton = GatewayTriton(f"fastmri-it-gw-{uuid.uuid4().hex[:8]}", _free_port(), _free_port(), gateway_onnx)
+    started = _docker(
+        "run", "-d", "--name", triton.name,
+        "-p", f"127.0.0.1:{triton.grpc_port}:8001", "-p", f"127.0.0.1:{triton.http_port}:8000",
+        "-v", f"{repo}:/models:ro",
+        TRITON_IMAGE, "tritonserver", "--model-repository=/models", "--strict-readiness=true",
+    )  # fmt: skip
+    if started.returncode != 0:
+        pytest.skip(f"could not start Triton: {started.stderr.strip()}")
+    try:
+        triton.wait_ready()
+        yield triton
+    finally:
+        _docker("rm", "-f", triton.name)

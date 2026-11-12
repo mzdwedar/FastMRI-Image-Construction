@@ -1,0 +1,141 @@
+{
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "fastmri-knee gateway",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/infer": {
+      "post": {
+        "description": "Body: float32 bytes, N\u00d71\u00d7320\u00d7320 with 1 \u2264 N \u2264 MAX_SLICES. Returns the same shape.",
+        "operationId": "infer_v1_infer_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Low-level inference (benchmark path)"
+      }
+    },
+    "/v1/model": {
+      "get": {
+        "operationId": "model_info_v1_model_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Model Info V1 Model Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Served model version and Triton-reported details"
+      }
+    },
+    "/v1/reconstructions": {
+      "post": {
+        "description": "Upload: multipart field `file`, a single-coil `.h5` with `kspace` (slices, H, W) complex64.\n\nReturns `application/x-hdf5`: dataset `reconstruction` (slices, 320, 320) float32 and root attributes\n`model_version`, `preprocess_version`, `request_id`, and `scale` (per-slice max the model input was divided\nby, so `reconstruction * scale[:, None, None]` restores relative intensity).",
+        "operationId": "reconstructions_v1_reconstructions_post",
+        "parameters": [
+          {
+            "description": "DEMO FEATURE. Simulate undersampling of a fully sampled file with a random Cartesian mask at this acceleration factor. Off by default.",
+            "in": "query",
+            "name": "acceleration",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 16,
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "DEMO FEATURE. Simulate undersampling of a fully sampled file with a random Cartesian mask at this acceleration factor. Off by default.",
+              "title": "Acceleration"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-hdf5": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reconstruct a k-space volume"
+      }
+    }
+  }
+}
