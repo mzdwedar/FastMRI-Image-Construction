@@ -2,9 +2,9 @@ import datetime
 import json
 import logging
 import os
+from pathlib import Path
 
 import hydra
-import mlflow
 import pytorch_lightning as pl
 from fastmri.data.subsample import RandomMaskFunc
 from mlflow.exceptions import MlflowException
@@ -17,6 +17,7 @@ from fastmri_knee import utils
 from fastmri_knee.data import FastMRIDataModule
 from fastmri_knee.model import UnetModel
 from fastmri_knee.paths import CONFIG_PATH
+from fastmri_knee.run_summary import build_summary, write_summary
 
 
 class StopOnFirstImprovement(Callback):
@@ -70,6 +71,7 @@ def train_fn(cfg: DictConfig) -> dict:
         save_top_k=cfg.trainer.checkpoint.top_k,
         every_n_epochs=cfg.trainer.checkpoint.n_epochs,
         dirpath=cfg.trainer.checkpoint.path,
+        save_last=True,  # last.ckpt lets a rerun resume after a Colab disconnect
         filename=cfg.trainer.checkpoint.filename,
         auto_insert_metric_name=False,
     )
@@ -128,12 +130,17 @@ def train_fn(cfg: DictConfig) -> dict:
         accelerator=cfg.trainer.accelerator,
         devices=cfg.trainer.gpus,
         max_epochs=cfg.trainer.train.max_epochs,
+        max_steps=cfg.trainer.train.max_steps,
         logger=mlflow_logger,
         strategy=cfg.trainer.train.strategy,
         callbacks=callbacks,
     )
 
-    trainer.fit(model, data_module)
+    last_ckpt = Path(cfg.trainer.checkpoint.path) / "last.ckpt"
+    resume_from = str(last_ckpt) if last_ckpt.is_file() else None
+    if resume_from:
+        logging.info("Resuming from %s", resume_from)
+    trainer.fit(model, data_module, ckpt_path=resume_from)
 
     hparams = {
         "lr": cfg.trainer.train.optimizer.lr,
@@ -156,10 +163,29 @@ def train_fn(cfg: DictConfig) -> dict:
 
     best_checkpoint = checkpoint_config.best_model_path
     if best_checkpoint:
-        with mlflow.start_run(run_id=mlflow_logger.run_id):
-            mlflow.log_artifact(best_checkpoint, artifact_path="checkpoints")
-            mlflow.log_metrics(metrics)
-            mlflow.log_params(hparams)
+        # the logger's own client, not mlflow's global active-run state (which other code in the process may own)
+        client, run_id = mlflow_logger.experiment, mlflow_logger.run_id
+        client.log_artifact(run_id, best_checkpoint, artifact_path="checkpoints")
+        for name, value in metrics.items():
+            client.log_metric(run_id, name, value)
+        for name, value in hparams.items():
+            client.log_param(run_id, name, value)
+
+    if best_checkpoint:
+        summary_path = write_summary(
+            Path(best_checkpoint),
+            build_summary(
+                Path(best_checkpoint),
+                metrics=metrics,
+                hyperparameters=hparams,
+                source=cfg.trainer.source,
+                global_step=trainer.global_step,
+                resumed_from=resume_from,
+            ),
+        )
+        logging.info("Wrote %s", summary_path)
+    else:
+        logging.warning("No best checkpoint (no validation epoch completed): run_summary.json not written")
 
     artifact_dir = os.path.join("mlruns", mlflow_logger.experiment_id, mlflow_logger.run_id, "artifacts", "checkpoints")
     checkpoint_path = os.path.join(artifact_dir, os.path.basename(best_checkpoint))

@@ -1,10 +1,10 @@
 datamodule:
   data_root: ${oc.env:data_root, data}
-  train_root: "data/train"
-  val_root: "data/val"
-  test_root: "data/test"
+  train_root: ${oc.env:train_root, "data/train"}
+  val_root: ${oc.env:val_root, "data/val"}
+  test_root: ${oc.env:test_root, "data/test"}
   batch_size: ${oc.decode:${oc.env:batch_size, 16}}
-  num_workers: 4
+  num_workers: ${oc.decode:${oc.env:num_workers, 4}}
   num_samples: -1
   mask:
     type: random

@@ -488,7 +488,12 @@ task that needs them is reached.
 Runs alongside the infra phases; K1 after F5/F7, K3 after P2. I can't execute Colab, so Colab runs are verified by
 you (manual check) and everything testable is covered locally on synthetic data.
 
-- [ ] **K1: Colab-ready training entrypoint and `run_summary.json`** — M
+- [x] **K1: Colab-ready training entrypoint and `run_summary.json`** — M
+  - Done 2026-11-12: `accelerator`, `max_steps`, `num_workers`, `checkpoint_dir`, `train_root`/`val_root`/`test_root` are env-overridable
+    (`oc.env`); `save_last` + resume from `<checkpoint_dir>/last.ckpt`; `run_summary.json` (`src/fastmri_knee/run_summary.py`)
+    matches what `register --summary` validates. Resume is verified at epoch boundaries; a run cut short by `max_steps`
+    does not continue on rerun (Lightning quirk), so use `max_epochs` for real runs. `train.py` now logs through the logger's
+    MLflow client, not the global active run.
   - Do: `accelerator: auto`; data/checkpoint/output paths overridable (Drive); resume from `last.ckpt` in the
     checkpoint dir (Colab disconnects); write `run_summary.json` next to the best checkpoint (git sha,
     `preprocess_version`, hparams, val metrics, checkpoint sha256, torch/CUDA versions, GPU name).
