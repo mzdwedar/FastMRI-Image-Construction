@@ -15,7 +15,12 @@ OUT = Path(__file__).parent / "dashboards"
 W = "[$__rate_interval]"
 PROM = {"type": "prometheus", "uid": "prometheus"}
 ALL_V1 = '{route=~"/v1/.*"}'
-AVAILABILITY_TARGET = 0.995  # SPEC-observability SLOs; the burn-rate rules (O5) replace these inline queries
+# SPEC-observability SLOs (latency only; thresholds are histogram bucket edges). The burn-rate rules (O5) replace
+# these inline 30 d queries.
+SLOS = {
+    "/v1/infer": {"le": "0.5", "target": 0.99, "label": "< 500 ms"},
+    "/v1/reconstructions": {"le": "5.0", "target": 0.95, "label": "< 5 s"},
+}
 
 NAV = [
     {"title": "Service overview", "uid": "fastmri-service"},
@@ -119,55 +124,73 @@ def explore_link(title, logql, datasource_uid="loki"):
     return {"title": title, "url": "/explore?left=" + quote(json.dumps(state, separators=(",", ":")), safe="${}_.")}
 
 
-GREEN_RED = [{"color": "red", "value": None}, {"color": "green", "value": AVAILABILITY_TARGET}]
-
-
 def hq(p, metric, by="route", extra=""):
     return f"histogram_quantile({p}, sum by (le, {by}) (rate({metric}_bucket{extra}{W})))"
 
 
 # ---------------------------------------------------------------- service overview
-availability = (
-    '1 - (sum(increase(gateway_requests_total{route=~"/v1/.*",status_class="5xx"}[30d])) '
-    '/ sum(increase(gateway_requests_total{route=~"/v1/.*"}[30d])))'
-)
-budget_left = f"1 - ((1 - ({availability})) / {1 - AVAILABILITY_TARGET})"
+
+
+def sli(route, le):
+    """Share of requests on `route` that finished under the bucket edge `le`, over 30 d."""
+    return (
+        f'sum(increase(gateway_request_duration_seconds_bucket{{route="{route}",le="{le}"}}[30d])) '
+        f'/ sum(increase(gateway_request_duration_seconds_count{{route="{route}"}}[30d]))'
+    )
+
+
+def slo_stats(x0):
+    """Per SLO: the 30 d SLI, and the error budget left (1 minus the share of the allowed slow requests used)."""
+    out = []
+    for i, (route, slo) in enumerate(SLOS.items()):
+        expr = sli(route, slo["le"])
+        out.append(
+            stat(
+                f"{route} {slo['label']} (30 d)",
+                expr,
+                "percentunit",
+                x0 + 6 * i,
+                0,
+                w=3,
+                desc=f"Share of {route} requests under {slo['label']}; SLO {slo['target']:.0%}. Covers the data "
+                "that exists if Prometheus holds less than 30 d.",
+                steps=[{"color": "red", "value": None}, {"color": "green", "value": slo["target"]}],
+                minv=0.8,
+                maxv=1,
+            )
+        )
+        out.append(
+            stat(
+                f"{route} budget left",
+                f"1 - ((1 - ({expr})) / {round(1 - slo['target'], 4)})",
+                "percentunit",
+                x0 + 6 * i + 3,
+                0,
+                w=3,
+                desc=f"1 minus the share of the {1 - slo['target']:.0%} slow-request allowance already used. "
+                "Negative = SLO breached.",
+                steps=[
+                    {"color": "red", "value": None},
+                    {"color": "orange", "value": 0.1},
+                    {"color": "green", "value": 0.5},
+                ],
+            )
+        )
+    return out
+
 
 service = dashboard(
     "fastmri-service",
     "Service overview",
     [
-        stat(
-            "Availability (30 d)",
-            availability,
-            "percentunit",
-            0,
-            0,
-            desc="Non-5xx / all responses on /v1/*; 4xx count as good. SLO 99.5 %. Covers the data that exists "
-            "if Prometheus holds less than 30 d.",
-            steps=GREEN_RED,
-            minv=0.9,
-            maxv=1,
-        ),
-        stat(
-            "Error budget left",
-            budget_left,
-            "percentunit",
-            4,
-            0,
-            desc="1 minus the share of the 0.5 % error budget already spent. Negative = SLO breached.",
-            steps=[
-                {"color": "red", "value": None},
-                {"color": "orange", "value": 0.1},
-                {"color": "green", "value": 0.5},
-            ],
-        ),
+        *slo_stats(0),
         stat(
             "Model ready",
             "min(gateway_model_ready)",
             "none",
-            8,
+            12,
             0,
+            w=3,
             desc="1 when Triton is reachable and the model is ready (alert: ModelNotReady).",
             steps=[{"color": "red", "value": None}, {"color": "green", "value": 1}],
         ),
@@ -175,20 +198,28 @@ service = dashboard(
             "Served model",
             "max by (version) (gateway_model_info)",
             "none",
-            12,
+            15,
             0,
+            w=3,
             desc="Model version the gateway reports (label of gateway_model_info).",
             text_mode="name",
         ),
         stat(
-            "In flight", "sum(gateway_inflight_requests)", "none", 16, 0, desc="Requests holding a backpressure slot."
+            "In flight",
+            "sum(gateway_inflight_requests)",
+            "none",
+            18,
+            0,
+            w=3,
+            desc="Requests holding a backpressure slot.",
         ),
         stat(
             "Rejections (5 m)",
             "sum(increase(gateway_rejected_total[5m])) or vector(0)",
             "none",
-            20,
+            21,
             0,
+            w=3,
             steps=[{"color": "green", "value": None}, {"color": "orange", "value": 1}],
         ),
         timeseries(
@@ -217,8 +248,7 @@ service = dashboard(
             "percentunit",
             12,
             4,
-            thresholds=[{"color": "transparent", "value": None}, {"color": "red", "value": 1 - AVAILABILITY_TARGET}],
-            desc="The red line is the availability SLO error budget (0.5 %).",
+            desc="Errors are not an SLO (SLOs are latency only); see GatewayDown, TritonDown and ModelNotReady for outages.",
         ),
         timeseries(
             "Latency p50 / p95 / p99 by route",
@@ -230,7 +260,7 @@ service = dashboard(
             "s",
             0,
             12,
-            desc="Includes upload read time. SLO: /v1/infer < 250 ms, /v1/reconstructions < 5 s.",
+            desc="Includes upload read time. SLO: /v1/infer < 500 ms, /v1/reconstructions < 5 s.",
         ),
         timeseries(
             "Stage time p95",
