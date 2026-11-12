@@ -64,7 +64,7 @@ task that needs them is reached.
   - Verify: `uv run pytest tests/unit/test_preprocess*.py`.
   - Deps: F4 · Files: `src/fastmri_knee/preprocess.py`, `src/fastmri_knee/data/…`, `tests/unit/test_preprocess.py`, `tests/unit/test_preprocess_no_torch.py`
 
-- [ ] **F8: Fix FFT shift → `PREPROCESS_VERSION="2"`** — S · **GATED on Q1**
+- [ ] ~~**F8: Fix FFT shift → `PREPROCESS_VERSION="2"`**~~ — S · **DROPPED 2026-11-12: Q1 = keep v1** (revisit only if Q1 is reopened)
   - Do: add `ifftshift`/`fftshift`; phantom test (centre of mass inside crop); update parity test to v2.
   - Acceptance: synthetic phantom 100% inside crop; v1 path deleted (no dual support).
   - Verify: `uv run pytest tests/unit/test_preprocess*.py tests/unit/test_fftshift.py`.
@@ -540,7 +540,7 @@ you (manual check) and everything testable is covered locally on synthetic data.
 
 ## Gated (outside infra scope)
 
-- [ ] **R1: Retrain on preprocessing v2 (Colab)** — you, via K2 · Deps: F8, Q1, K2, K3, S11 · download `best.ckpt` + `run_summary.json` from Drive, then `make register CKPT=… SUMMARY=… && make promote VERSION=n ALIAS=production`
+- [ ] ~~**R1: Retrain on preprocessing v2 (Colab)**~~ **DROPPED 2026-11-12: Q1 = keep v1, no v2 to retrain on** — you, via K2 · Deps: F8, Q1, K2, K3, S11 · download `best.ckpt` + `run_summary.json` from Drive, then `make register CKPT=… SUMMARY=… && make promote VERSION=n ALIAS=production`
 
 ---
 
@@ -552,7 +552,7 @@ so the decision isn't lost.
 
 ### Decisions (Q)
 
-- [ ] **Q1: Fix the FFT shift and retrain?**
+- [x] **Q1: Fix the FFT shift and retrain?** → decided 2026-11-12: (b) keep `PREPROCESS_VERSION="1"`, no retrain. Chosen to avoid a retrain; the half-frame misalignment is a known limitation, not fixed
   - Context: confirmed on a synthetic phantom; `|ifft2(k)|` is the correct image shifted by half a frame, so the
     crop misses the anatomy. Every existing model was trained on misaligned inputs.
   - Options: (a) fix → `PREPROCESS_VERSION="2"`, retrain (R1); (b) keep v1.
