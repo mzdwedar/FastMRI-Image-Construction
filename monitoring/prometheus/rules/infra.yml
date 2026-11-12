@@ -1,0 +1,46 @@
+# Infra and meta-monitoring alerts. Container series come from cAdvisor and are keyed by cgroup `id`
+# (no container name under Docker Desktop's containerd image store); the host root cgroup "/" is excluded.
+groups:
+  - name: infra
+    rules:
+      # A limit of 0 means unlimited, so those containers are filtered out of the denominator.
+      - alert: ContainerMemoryHigh
+        expr: |
+          container_memory_working_set_bytes{id=~"/docker/.+"}
+            / on (id) (container_spec_memory_limit_bytes{id=~"/docker/.+"} > 0) > 0.9
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Container {{ $labels.id | reReplaceAll \"^/docker/(.{12}).*\" \"$1\" }} is above 90% of its memory limit"
+          description: "Working set is {{ $value | humanizePercentage }} of the limit."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ContainerMemoryHigh.md
+
+      - alert: ContainerCPUThrottled
+        expr: |
+          rate(container_cpu_cfs_throttled_periods_total{id=~"/docker/.+"}[5m])
+            / rate(container_cpu_cfs_periods_total{id=~"/docker/.+"}[5m]) > 0.25
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Container {{ $labels.id | reReplaceAll \"^/docker/(.{12}).*\" \"$1\" }} is CPU-throttled"
+          description: "{{ $value | humanizePercentage }} of CFS periods were throttled over 5 minutes."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ContainerCPUThrottled.md
+
+      # gateway and triton have their own page-level alerts; this catches every other scrape job.
+      - alert: PrometheusTargetMissing
+        expr: up{job!~"gateway|triton"} == 0
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) is down"
+          description: Monitoring data from this target is missing.
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/PrometheusTargetMissing.md
+
+      - alert: AlertmanagerNotifyFailing
+        expr: sum by (integration) (rate(alertmanager_notifications_failed_total[5m])) > 0
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Alertmanager cannot deliver {{ $labels.integration }} notifications"
+          description: Alerts may be firing without anyone being told.
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/AlertmanagerNotifyFailing.md

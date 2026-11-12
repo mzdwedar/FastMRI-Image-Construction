@@ -1,0 +1,126 @@
+rule_files:
+  - ../rules/infra.yml
+evaluation_interval: 1m
+
+tests:
+  # limit 100 MiB; working set 95 MiB (> 90%) for the container 'aaaa...', 50 MiB for 'bbbb...'
+  - name: ContainerMemoryHigh fires only for the container above 90% of its limit
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{id="/docker/aaaaaaaaaaaabbbb"}'
+        values: '99614720x20'
+      - series: 'container_spec_memory_limit_bytes{id="/docker/aaaaaaaaaaaabbbb"}'
+        values: '104857600x20'
+      - series: 'container_memory_working_set_bytes{id="/docker/cccccccccccc0000"}'
+        values: '52428800x20'
+      - series: 'container_spec_memory_limit_bytes{id="/docker/cccccccccccc0000"}'
+        values: '104857600x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ContainerMemoryHigh
+        exp_alerts: []                  # pending, 5m not reached
+      - eval_time: 10m
+        alertname: ContainerMemoryHigh
+        exp_alerts:
+          - exp_labels: {severity: ticket, id: "/docker/aaaaaaaaaaaabbbb"}
+            exp_annotations:
+              summary: Container aaaaaaaaaaaa is above 90% of its memory limit
+              description: Working set is 95% of the limit.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ContainerMemoryHigh.md
+
+  - name: ContainerMemoryHigh ignores unlimited containers and the host root cgroup
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{id="/docker/dddddddddddd0000"}'
+        values: '9999999999x20'
+      - series: 'container_spec_memory_limit_bytes{id="/docker/dddddddddddd0000"}'
+        values: '0x20'                  # 0 = no limit
+      - series: 'container_memory_working_set_bytes{id="/"}'
+        values: '9999999999x20'
+      - series: 'container_spec_memory_limit_bytes{id="/"}'
+        values: '1000x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ContainerMemoryHigh
+        exp_alerts: []
+
+  # 40% of periods throttled vs 10%
+  - name: ContainerCPUThrottled fires at 40% throttled for 15m
+    interval: 1m
+    input_series:
+      - series: 'container_cpu_cfs_periods_total{id="/docker/eeeeeeeeeeee0000"}'
+        values: '0+600x40'
+      - series: 'container_cpu_cfs_throttled_periods_total{id="/docker/eeeeeeeeeeee0000"}'
+        values: '0+240x40'
+      - series: 'container_cpu_cfs_periods_total{id="/docker/ffffffffffff0000"}'
+        values: '0+600x40'
+      - series: 'container_cpu_cfs_throttled_periods_total{id="/docker/ffffffffffff0000"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ContainerCPUThrottled
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: ContainerCPUThrottled
+        exp_alerts:
+          - exp_labels: {severity: ticket, id: "/docker/eeeeeeeeeeee0000"}
+            exp_annotations:
+              summary: Container eeeeeeeeeeee is CPU-throttled
+              description: 40% of CFS periods were throttled over 5 minutes.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ContainerCPUThrottled.md
+
+  - name: ContainerCPUThrottled quiet for an idle container (0 periods)
+    interval: 1m
+    input_series:
+      - series: 'container_cpu_cfs_periods_total{id="/docker/aaaaaaaaaaaa0000"}'
+        values: '0x40'
+      - series: 'container_cpu_cfs_throttled_periods_total{id="/docker/aaaaaaaaaaaa0000"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ContainerCPUThrottled
+        exp_alerts: []
+
+  - name: PrometheusTargetMissing fires for a down exporter but not for gateway or triton
+    interval: 1m
+    input_series:
+      - series: 'up{job="cadvisor",instance="cadvisor:8080"}'
+        values: '0x20'
+      - series: 'up{job="node-exporter",instance="node-exporter:9100"}'
+        values: '1x20'
+      - series: 'up{job="gateway",instance="gateway:8000"}'
+        values: '0x20'
+      - series: 'up{job="triton",instance="triton:8002"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PrometheusTargetMissing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: PrometheusTargetMissing
+        exp_alerts:
+          - exp_labels: {severity: ticket, job: cadvisor, instance: "cadvisor:8080"}
+            exp_annotations:
+              summary: Scrape target cadvisor (cadvisor:8080) is down
+              description: Monitoring data from this target is missing.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/PrometheusTargetMissing.md
+
+  - name: AlertmanagerNotifyFailing fires on failing integration, not on a healthy one
+    interval: 1m
+    input_series:
+      - series: 'alertmanager_notifications_failed_total{integration="slack"}'
+        values: '0+1x20'
+      - series: 'alertmanager_notifications_failed_total{integration="webhook"}'
+        values: '3x20'                  # old failures, no recent increase
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AlertmanagerNotifyFailing
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: AlertmanagerNotifyFailing
+        exp_alerts:
+          - exp_labels: {severity: ticket, integration: slack}
+            exp_annotations:
+              summary: Alertmanager cannot deliver slack notifications
+              description: Alerts may be firing without anyone being told.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/AlertmanagerNotifyFailing.md

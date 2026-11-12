@@ -71,11 +71,11 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 	docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
 		check config /etc/prometheus/prometheus.yml
 	@if ls monitoring/prometheus/rules/*.yml >/dev/null 2>&1; then \
-		docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
-			check rules /etc/prometheus/rules/*.yml; fi
+		docker run --rm --entrypoint /bin/sh -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
+			-c 'promtool check rules /etc/prometheus/rules/*.yml'; fi
 	@if ls monitoring/prometheus/tests/*.yml >/dev/null 2>&1; then \
-		docker run --rm --entrypoint promtool -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
-			test rules /etc/prometheus/tests/*.yml; fi
+		docker run --rm --entrypoint /bin/sh -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
+			-c 'promtool test rules /etc/prometheus/tests/*.yml'; fi
 	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
 	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \

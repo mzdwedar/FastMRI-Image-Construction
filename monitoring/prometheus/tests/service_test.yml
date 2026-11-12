@@ -1,0 +1,151 @@
+rule_files:
+  - ../rules/service.yml
+evaluation_interval: 1m
+
+tests:
+  - name: GatewayDown fires after 1m down, not on a blip
+    interval: 15s
+    input_series:
+      - series: 'up{job="gateway",instance="gateway:8000"}'
+        values: '1 1 0 0 0 0 0 0 0'     # down from t=30s onward
+      - series: 'up{job="triton",instance="triton:8002"}'
+        values: '1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: GatewayDown
+        exp_alerts: []                  # down for only 30s: still pending
+      - eval_time: 2m
+        alertname: GatewayDown
+        exp_alerts:
+          - exp_labels: {severity: page, job: gateway, instance: "gateway:8000"}
+            exp_annotations:
+              summary: Gateway is not answering scrapes
+              description: Prometheus has failed to scrape gateway:8000 for 1 minute.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/GatewayDown.md
+      - eval_time: 2m
+        alertname: TritonDown
+        exp_alerts: []
+
+  - name: GatewayDown does not fire when a single scrape fails
+    interval: 15s
+    input_series:
+      - series: 'up{job="gateway",instance="gateway:8000"}'
+        values: '1 1 0 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GatewayDown
+        exp_alerts: []
+
+  - name: TritonDown fires, GatewayDown stays quiet
+    interval: 15s
+    input_series:
+      - series: 'up{job="triton",instance="triton:8002"}'
+        values: '0 0 0 0 0 0 0 0 0'
+      - series: 'up{job="gateway",instance="gateway:8000"}'
+        values: '1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TritonDown
+        exp_alerts:
+          - exp_labels: {severity: page, job: triton, instance: "triton:8002"}
+            exp_annotations:
+              summary: Triton is not answering scrapes
+              description: Prometheus has failed to scrape triton:8002 for 1 minute.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/TritonDown.md
+      - eval_time: 2m
+        alertname: GatewayDown
+        exp_alerts: []
+
+  - name: ModelNotReady fires after 2m not ready, not when ready
+    interval: 30s
+    input_series:
+      - series: 'gateway_model_ready{job="gateway",instance="gateway:8000"}'
+        values: '1 0 0 0 0 0 0 0 0 0'    # not ready from t=30s
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ModelNotReady
+        exp_alerts: []                   # 1m30s not ready: pending
+      - eval_time: 4m
+        alertname: ModelNotReady
+        exp_alerts:
+          - exp_labels: {severity: page, job: gateway, instance: "gateway:8000"}
+            exp_annotations:
+              summary: Gateway reports the model as not ready
+              description: Reconstruction requests are being refused until the readiness loop sees the model loaded in Triton.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ModelNotReady.md
+
+  - name: ModelNotReady quiet while ready
+    interval: 30s
+    input_series:
+      - series: 'gateway_model_ready{job="gateway",instance="gateway:8000"}'
+        values: '1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ModelNotReady
+        exp_alerts: []
+
+  # queue grows 0.6 s per second, compute 1 s per second -> ratio 0.6 (> 0.5)
+  - name: TritonQueueSaturation fires at ratio 0.6 for 10m
+    interval: 1m
+    input_series:
+      - series: 'nv_inference_queue_duration_us{model="unet_model",version="1"}'
+        values: '0+36000000x30'
+      - series: 'nv_inference_compute_infer_duration_us{model="unet_model",version="1"}'
+        values: '0+60000000x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: TritonQueueSaturation
+        exp_alerts:
+          - exp_labels: {severity: ticket, model: unet_model}
+            exp_annotations:
+              summary: Requests to unet_model wait in Triton's queue for over half as long as they compute
+              description: Queue/compute time ratio is 0.60 over 10 minutes; capacity is short.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/TritonQueueSaturation.md
+
+  - name: TritonQueueSaturation quiet at ratio 0.1, and with no traffic
+    interval: 1m
+    input_series:
+      - series: 'nv_inference_queue_duration_us{model="unet_model",version="1"}'
+        values: '0+6000000x30'
+      - series: 'nv_inference_compute_infer_duration_us{model="unet_model",version="1"}'
+        values: '0+60000000x30'
+      - series: 'nv_inference_queue_duration_us{model="idle",version="1"}'
+        values: '0+0x30'
+      - series: 'nv_inference_compute_infer_duration_us{model="idle",version="1"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: TritonQueueSaturation
+        exp_alerts: []
+
+  - name: GatewayRejectingLoad fires after 10m of rejections
+    interval: 1m
+    input_series:
+      - series: 'gateway_rejected_total{reason="overloaded",job="gateway",instance="gateway:8000"}'
+        values: '0+10x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: GatewayRejectingLoad
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: GatewayRejectingLoad
+        exp_alerts:
+          - exp_labels: {severity: ticket, job: gateway, instance: "gateway:8000", reason: overloaded}
+            exp_annotations:
+              summary: Gateway has been shedding load for 10 minutes
+              description: Rejecting 0.17 requests/s with reason=overloaded.
+              runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/GatewayRejectingLoad.md
+
+  - name: GatewayRejectingLoad ignores other rejection reasons
+    interval: 1m
+    input_series:
+      - series: 'gateway_rejected_total{reason="unauthorized"}'
+        values: '0+100x30'
+      - series: 'gateway_rejected_total{reason="too_large"}'
+        values: '0+100x30'
+      - series: 'gateway_rejected_total{reason="overloaded"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: GatewayRejectingLoad
+        exp_alerts: []

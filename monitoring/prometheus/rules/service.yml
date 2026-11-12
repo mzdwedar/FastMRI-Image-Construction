@@ -1,0 +1,52 @@
+# Symptom alerts on the serving path (SPEC-observability "Alerts"). Page = wake someone; ticket = next working day.
+# Runbooks are written by O6; each rule already points at its page.
+groups:
+  - name: service
+    rules:
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: Gateway is not answering scrapes
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for 1 minute."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/GatewayDown.md
+
+      - alert: TritonDown
+        expr: up{job="triton"} == 0
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: Triton is not answering scrapes
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for 1 minute."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/TritonDown.md
+
+      - alert: ModelNotReady
+        expr: gateway_model_ready == 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: Gateway reports the model as not ready
+          description: Reconstruction requests are being refused until the readiness loop sees the model loaded in Triton.
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/ModelNotReady.md
+
+      # avg queue time per request / avg compute time per request; the request count cancels, so a ratio of rates.
+      - alert: TritonQueueSaturation
+        expr: |
+          sum by (model) (rate(nv_inference_queue_duration_us[10m]))
+            / sum by (model) (rate(nv_inference_compute_infer_duration_us[10m])) > 0.5
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Requests to {{ $labels.model }} wait in Triton's queue for over half as long as they compute"
+          description: "Queue/compute time ratio is {{ $value | printf \"%.2f\" }} over 10 minutes; capacity is short."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/TritonQueueSaturation.md
+
+      - alert: GatewayRejectingLoad
+        expr: rate(gateway_rejected_total{reason="overloaded"}[5m]) > 0
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: Gateway has been shedding load for 10 minutes
+          description: "Rejecting {{ $value | printf \"%.2f\" }} requests/s with reason=overloaded."
+          runbook_url: https://github.com/mzdwedar/FastMRI-Image-Construction/blob/main/docs/runbooks/GatewayRejectingLoad.md

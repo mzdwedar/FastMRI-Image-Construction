@@ -357,10 +357,14 @@ task that needs them is reached.
     store, so its series carry the cgroup `id` only: O4's container alerts must key on `id` (or add a mapping).
   - Deps: G6, Q11, S2 (S5 if Slack) · Files: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`, `monitoring/alertmanager/alertmanager.yml`, `monitoring/alert-sink/` , `Makefile`
 
-- [ ] **O4: Symptom and infra alerts with rule tests** — M
+- [x] **O4: Symptom and infra alerts with rule tests** — M
   - Do: rules for GatewayDown, TritonDown, ModelNotReady, TritonQueueSaturation, GatewayRejectingLoad,
     ContainerMemoryHigh, ContainerCPUThrottled, meta-monitoring; promtool tests firing + not firing each.
   - Acceptance/Verify: `promtool test rules monitoring/prometheus/tests/*.yml` green.
+  - **Done (2026-11-12):** 9 rules (5 service, 4 infra), 11 promtool cases (firing and quiet per alert). Container alerts key on
+    cAdvisor `id=~"/docker/.+"` and skip unlimited containers (limit 0). Each rule already carries its `runbook_url`
+    (pages land in O6). Also fixed `make check-configs`: rule globs were expanded by the host shell, so the rules/tests
+    steps never ran; they now run through `sh -c` in the container. Live: `ModelNotReady` fired and reached `alert-sink`.
   - Deps: O1, O3 · Files: `monitoring/prometheus/rules/{service,infra}.yml`, `monitoring/prometheus/tests/{service,infra}_test.yml`
 
 - [ ] **O5: SLO recording rules and burn-rate alerts** — M

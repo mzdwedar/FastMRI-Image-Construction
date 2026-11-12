@@ -311,7 +311,8 @@ Notes:
 ### Monitoring
 - One Prometheus (`monitoring/prometheus/prometheus.yml`) scrapes the gateway, Triton, Alertmanager, node-exporter and cAdvisor.
 - Alerts go to Alertmanager (:9093), whose default receiver is `alert-sink`; set `SLACK_WEBHOOK_URL` in `.env` to add Slack.
-- `make check-configs` validates the Compose file, Prometheus config and rules, and both Alertmanager variants (needs Docker).
+- Alert rules live in `monitoring/prometheus/rules/` (`service.yml`, `infra.yml`) with promtool tests in `monitoring/prometheus/tests/`; every alert has a firing and a quiet test case.
+- `make check-configs` validates the Compose file, Prometheus config, rules and rule tests, and both Alertmanager variants (needs Docker).
 - cAdvisor identifies containers by cgroup `id`, not name, under Docker Desktop's containerd image store.
 - Grafana dashboards are provisioned under `monitoring/grafana/` and an example latency plot is included (`docs/img/grafana_latency.png`).
 
