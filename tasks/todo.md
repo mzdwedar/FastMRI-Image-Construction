@@ -94,8 +94,8 @@ task that needs them is reached.
 ## Phase 2 — CI bootstrap (SPEC-ci-cd)
 
 - [x] **C1: `ci.yml` with lint, typecheck, unit, security** — M
-  - Done locally 2026-11-12: workflow + `make ci`; actionlint and `make ci` pass. Not yet run on GitHub (needs S4 push and
-    the drill PR). `pip-audit` is report-only (`continue-on-error`) because the lock has 413 known vulnerabilities; make it
+  - Done 2026-11-12: workflow + `make ci`. Verified on GitHub: green on PR #3 (`refactor/prod-infra` → `main`); drill PR #2
+    (failing test + lint error) failed `lint` and `unit` only, then closed. `pip-audit` is report-only (`continue-on-error`) because the lock has 413 known vulnerabilities; make it
     blocking after the dependency bumps (P1).
   - Do: setup-uv with lock-keyed cache; jobs call `make lint|typecheck|test`; `security` job: gitleaks +
     `pip-audit` on exported requirements; `actionlint`; SHA-pinned actions; `contents: read`; concurrency group.
@@ -103,7 +103,9 @@ task that needs them is reached.
   - Verify: push; drill PR with a failing test and a lint error fails the right jobs.
   - Deps: F6, F10, S4 · Files: `.github/workflows/ci.yml`, `Makefile` (`ci` target)
 
-- [ ] **C2: Dependency update automation** — XS
+- [x] **C2: Dependency update automation** — XS
+  - Done 2026-11-12 (S7 = Dependabot, per recommendation): weekly, one grouped PR each for actions, Docker
+    (`deploy/services/fastapi`), uv. GitHub UI parse check pending the merge to `main`.
   - Do: Dependabot (or Renovate) for actions, Docker, uv; weekly, grouped.
   - Acceptance/Verify: config validates (GitHub UI shows it parsed).
   - Deps: C1, S7 · Files: `.github/dependabot.yml`
@@ -613,7 +615,7 @@ so the decision isn't lost.
   - → Decided 2026-11-12: none needed up front. F1 saves a random-init checkpoint under 3.10 and loads it under the
     new Python; real checkpoints come from Colab (K2).
 
-- [ ] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
+- [x] **S4: GitHub Actions enabled on `mzdwedar/fastmri`, branch pushed**
   - Do: confirm Actions enabled; `git push -u origin refactor/prod-infra` (I'll ask before pushing).
   - Trigger: C1 · Blocks: C1, C3, C4, C5, C7
 
@@ -626,7 +628,7 @@ so the decision isn't lost.
     `GF_ADMIN_PASSWORD` in `.env`. `secrets/` and `.env` are gitignored.
   - Trigger: G5 / G6
 
-- [ ] **S7: Dependency bot choice**
+- [x] **S7: Dependency bot choice**
   - Options: Dependabot (no install) · Renovate (install the GitHub app).
   - Recommendation: Dependabot.
   - Trigger: C2
