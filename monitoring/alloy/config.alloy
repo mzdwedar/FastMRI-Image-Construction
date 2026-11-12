@@ -1,0 +1,56 @@
+// Docker log discovery -> Loki. Labels are `service` and `level` only (bounded cardinality);
+// request_id, route, status etc. stay in the JSON line and are queried with `| json`.
+// O8 adds the OTLP receiver -> Tempo pipeline to this file.
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+	// Only this Compose project's containers.
+	filter {
+		name   = "label"
+		values = ["com.docker.compose.project"]
+	}
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	labels     = {}
+	forward_to = [loki.process.logs.receiver]
+}
+
+loki.process "logs" {
+	// Gateway (and alert-sink) emit JSON with a `level` key; other services' lines simply carry no level label.
+	stage.match {
+		selector = "{service=~\"gateway|alert-sink\"} |= \"\\\"level\\\"\""
+
+		stage.json {
+			expressions = {level = "level"}
+		}
+
+		stage.labels {
+			values = {level = ""}
+		}
+	}
+
+	// Drop everything but service and level (docker discovery adds many __meta_ and container labels).
+	stage.label_keep {
+		values = ["service", "level"]
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

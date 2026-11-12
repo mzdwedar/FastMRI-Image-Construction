@@ -172,6 +172,33 @@ services:
     expose:
       - "8080"
 
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./monitoring/loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    mem_limit: 384m
+    ports:
+      - "3100:3100"
+
+  alloy:
+    image: grafana/alloy:v1.3.1
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Docker discovery needs the socket; :ro does not make it harmless (the API is still root-equivalent),
+      # so Alloy publishes no ports beyond its own UI and runs no user-supplied config.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    mem_limit: 256m
+    depends_on:
+      - loki
+
   grafana:
     image: grafana/grafana:11.1.4
     environment:
@@ -187,6 +214,7 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+      - loki
 
 secrets:
   api_keys:
@@ -197,3 +225,5 @@ volumes:
   prometheus_data:
   alertmanager_data:
   grafana_data:
+  loki_data:
+  alloy_data:

@@ -65,6 +65,8 @@ up-dev: ## Same, and publish Triton HTTP :8100 / gRPC :8101 on the host
 
 PROM_IMAGE ?= prom/prometheus:v2.54.1
 AM_IMAGE ?= prom/alertmanager:v0.27.0
+LOKI_IMAGE ?= grafana/loki:3.1.1
+ALLOY_IMAGE ?= grafana/alloy:v1.3.1
 
 check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and Alertmanager config (needs Docker)
 	docker compose config -q
@@ -76,6 +78,11 @@ check-configs: ## Validate Compose, Prometheus config/rules (+ rule tests) and A
 	@if ls monitoring/prometheus/tests/*.yml >/dev/null 2>&1; then \
 		docker run --rm --entrypoint /bin/sh -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" $(PROM_IMAGE) \
 			-c 'promtool test rules /etc/prometheus/tests/*.yml'; fi
+	@# Loki config loads; Alloy config parses (alloy fmt) and is formatted
+	docker run --rm -v "$(CURDIR)/monitoring/loki/config.yml:/etc/loki/config.yml:ro" $(LOKI_IMAGE) \
+		-config.file=/etc/loki/config.yml -verify-config
+	docker run --rm -v "$(CURDIR)/monitoring/alloy/config.alloy:/c.alloy:ro" $(ALLOY_IMAGE) fmt /c.alloy | diff -u monitoring/alloy/config.alloy - \
+		|| { echo "config.alloy is not formatted/parsable: run alloy fmt"; exit 1; }
 	@# Alertmanager: the default config and the Slack variant that render.sh produces when SLACK_WEBHOOK_URL is set
 	docker run --rm --entrypoint /bin/sh -e SLACK_WEBHOOK_URL=https://hooks.invalid/T/B/x \
 		-v "$(CURDIR)/monitoring/alertmanager:/cfg:ro" $(AM_IMAGE) \
