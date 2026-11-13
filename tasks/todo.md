@@ -547,9 +547,14 @@ task that needs them is reached.
   - Verify: tag on the branch; pull and run.
   - Deps: G6, C4, Q14, S9 · Files: `.github/workflows/release.yml`, `cliff.toml`, `.env.example`
 
-- [ ] **C7: `bench.yml` nightly (advisory)** — S
+- [x] **C7: `bench.yml` nightly (advisory)** — S
   - Do: nightly + manual; runs `make bench bench-compare`; job summary; fails only on > 30% regression.
   - Acceptance/Verify: manual dispatch succeeds and posts a summary.
+  - **Done (2026-11-12):** `bench.yml` (03:17 UTC nightly + `workflow_dispatch`, never on PRs) runs `make ci-bench`
+    (mlflow + triton under its own Compose project name, random-init model, `make bench`), writes a job summary table and
+    uploads the result. The committed baseline came from another machine, so the gate uses `benchmarks/baselines/ci.json`
+    (the runner's own); until that exists the job reports only. With it: fails on > 30 % throughput drop or p99 rise at
+    c=16, or any error (`compare.py --max-regression 0.3`). The first dispatch's artifact becomes `ci.json`.
   - Deps: T4, C4 · Files: `.github/workflows/bench.yml`
 
 - [ ] **C8: Drills and contribution docs** — S

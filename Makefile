@@ -118,6 +118,18 @@ ci-e2e: ## What e2e.yml runs: build, up (whole stack), model-random, promote, te
 	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
 	$(MAKE) test-e2e
 
+ci-bench: ## What bench.yml runs: mlflow + triton, random-init model, `make bench`, then `down -v` of its own project
+	@mkdir -p secrets deploy/model_repository
+	@# own project name: `down -v` below cannot touch the volumes of a local `make up` stack
+	@set -e; \
+	export COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml COMPOSE_PROJECT_NAME=fastmri-bench; \
+	trap 'docker compose down -v' EXIT; \
+	$(MAKE) -s api-key >/dev/null; chmod 644 secrets/api_keys; \
+	docker compose up -d --wait mlflow triton; \
+	$(MAKE) model-random; \
+	$(MAKE) promote VERSION=1 FORCE=1 ALLOW_RANDOM=1; \
+	$(MAKE) bench NAME=ci
+
 NAME ?= cpu
 MODEL ?= unet_model
 bench: ## Load-test Triton directly (needs `make up-dev` + `make sync`): make bench NAME=cpu MODEL=unet_model [ARGS="--duration 10"]
@@ -139,4 +151,4 @@ clean: ## Remove caches and build output (not data, runs or venvs)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist htmlcov .coverage
 	find . -name __pycache__ -not -path './.venv*' -prune -exec rm -rf {} +
 
-.PHONY: bench bench-compare help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean
+.PHONY: bench bench-compare ci-bench help setup api-key lint format typecheck test ci test-integration test-e2e ci-e2e model-random register sync promote rollback up up-dev check-configs dashboards hadolint down data train clean

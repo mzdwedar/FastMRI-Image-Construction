@@ -1,0 +1,58 @@
+name: bench
+
+# Advisory: nightly and on demand, never on pull requests. Shared runners are noisy, and the committed baseline
+# (benchmarks/baselines/cpu.json) was measured on a different machine, so this workflow compares against its own
+# baseline for the runner (benchmarks/baselines/ci.json) and fails only on a regression of more than 30 % at c=16.
+# Until ci.json exists it just reports the numbers.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+env:
+  UV_FROZEN: "1"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Free disk space (the Triton image is large)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker image prune --all --force
+      - run: make setup
+      - name: make ci-bench
+        run: make ci-bench
+      - name: Compare and summarise
+        run: |
+          if [ -f benchmarks/baselines/ci.json ]; then
+            args=(--baseline benchmarks/baselines/ci.json --max-regression 0.3)
+          else
+            args=(--report-only)
+            echo "::notice::no benchmarks/baselines/ci.json yet: report only. Commit this run's bench-result artifact as that file to enable the gate."
+          fi
+          rc=0
+          uv run python -m benchmarks.compare --result benchmarks/results/ci.json "${args[@]}" --markdown bench-summary.md || rc=$?
+          cat bench-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: bench-result
+          path: |
+            benchmarks/results/ci.json
+            bench-summary.md
+          if-no-files-found: ignore
