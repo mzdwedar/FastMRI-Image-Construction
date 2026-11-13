@@ -566,7 +566,7 @@ M1–M6 and Q13 are kept below for reference and are not to be worked. `SPEC-mod
   - Verify: links to drill runs in the PR.
   - Deps: C1–C6, S10 · Files: `docs/contributing.md`
 
-- [x] **D1: README rewrite** — S · done 2026-11-13 (PR #58). Not yet verified: the quickstart has not been followed in a fresh clone, so the acceptance check is still manual.
+- [x] **D1: README rewrite** — S · done 2026-11-13 (PR #58). Verified 2026-11-13: quickstart followed in a fresh clone at `042a5a2` (setup, api-key, up-dev, model-random, promote, sync, curl) to a 200 reconstruction with a synthetic `.h5`; README gained the synthetic-file step.
   - Do: architecture diagram (target), quickstart (`make setup model-random up`), operations (promote/rollback,
     dashboards, alerts, runbooks), GPU section, links to specs; remove stale sections.
   - Acceptance: a new user follows the quickstart on a clean machine to a working reconstruct call.

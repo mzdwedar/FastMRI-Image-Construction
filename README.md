@@ -53,10 +53,15 @@ make api-key                                 # prints a key once; stores only it
 make up-dev                                  # whole stack; Triton also on :8100 (HTTP) / :8101 (gRPC)
 make model-random                            # register an untrained model (random_init) in MLflow
 make promote VERSION=1 FORCE=1 ALLOW_RANDOM=1
-make sync                                    # load it into Triton
+make sync                                    # confirms Triton serves it (promote already loads it)
+
+# a synthetic k-space volume, if you have no FastMRI file
+uv run python -c "from pathlib import Path; from tests.fixtures.synthetic import make_kspace, write_h5; write_h5(Path('sample.h5'), make_kspace())"
 
 curl -H "X-API-Key: $KEY" -F file=@sample.h5 localhost:8000/v1/reconstructions -o out.h5
 ```
+
+`KEY` is the value `make api-key` printed. The output `.h5` holds `reconstruction`, shaped `(slices, 320, 320)`.
 
 `make up` is the same without publishing Triton's ports. `make down` stops everything.
 
