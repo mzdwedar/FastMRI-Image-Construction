@@ -4,21 +4,23 @@ A U-Net that reconstructs knee MRI (FastMRI single-coil) from undersampled k-spa
 model registry and gated promotion, NVIDIA Triton inference, a FastAPI gateway, full observability (metrics, logs,
 traces, alerts, SLOs) and CI. It runs on a single host with Docker Compose. Training happens on Google Colab.
 
-## Status
+## The MLOps picture
 
-Work is tracked in [tasks/todo.md](tasks/todo.md) (plan: [tasks/plan.md](tasks/plan.md), specs: [SPEC.md](SPEC.md) and
-`SPEC-<module>.md`).
+The repo covers the whole loop from data to a monitored, versioned model in production.
 
-| Area | State |
-|---|---|
-| Foundation (package layout, numpy preprocessing, Makefile, tooling) | Done. F2 (FFT check on a real slice) still open; the decision is to keep `PREPROCESS_VERSION="1"`, no retrain |
-| Model packaging (ONNX export, MLflow registry, `sync`, gated `promote`/`rollback`) | Done |
-| Triton (explicit model control, dynamic batching, benchmark baseline, GPU override) | Done. The GPU override is validated in CI but has never run on a GPU |
-| Gateway (`/v1/reconstructions`, `/v1/infer`, API-key auth, backpressure, image) | Done. P8 (promotion under load) still open |
-| Observability (Prometheus, Alertmanager, Loki, Tempo, Alloy, Grafana, SLOs, runbooks) | Done |
-| CI (`ci.yml`, `e2e.yml`, nightly advisory `bench.yml`) | Done. `release.yml` (C6) and the drills/contribution docs (C8) are open |
-| Training on Colab (notebook, `run_summary.json`, register locally) | Done, smoke-run verified. No full training run has been done yet |
-| Model monitoring (drift, quality proxy) | Dropped. Monitoring is system-level only |
+| Stage | What it does | Where |
+|---|---|---|
+| Data | Download and split FastMRI knee data by subject | `make data`, `fastmri_knee.data` |
+| Train | PyTorch Lightning + Hydra configs; GPU training on Colab, resumable; writes a `run_summary.json` (git sha, hparams, metrics, checkpoint hash) | `fastmri_knee.train`, `notebooks/train_colab.ipynb` |
+| Track | MLflow experiments and runs | `mlruns/`, MLflow service |
+| Package | Checkpoint to ONNX with a parity check, plus a model card | `fastmri_knee.packaging` |
+| Register and promote | MLflow model registry; aliases drive promotion; gates on PSNR, preprocessing version and random-init; one-command rollback | `make register`, `make promote`, `make rollback` |
+| Serve | Triton model repository generated from the registry; FastAPI gateway in front | `make sync`, `make up` |
+| Observe | Metrics, logs, traces, alerts, latency SLOs, dashboards as code, runbooks | `monitoring/`, `docs/runbooks/` |
+| Verify | Lint, typecheck, unit, integration against real Triton, full-stack e2e, nightly benchmark | `.github/workflows/`, `benchmarks/` |
+
+Design and decisions live in [SPEC.md](SPEC.md) and the `SPEC-<module>.md` files; the task list is in
+[tasks/todo.md](tasks/todo.md).
 
 ## Architecture
 
@@ -159,12 +161,3 @@ GPU numbers as `benchmarks/baselines/gpu.json` before changing a default.
 ├─ docker-compose*.yml    # base, dev (published ports), gpu override
 ├─ SPEC*.md tasks/        # specs, plan, task list
 ```
-
-## Known limitations
-
-- Preprocessing is `PREPROCESS_VERSION="1"` (FFT-shift behaviour unchanged, decision recorded); F2 would verify it on a
-  real slice.
-- No full training run has been done yet; only a Colab smoke run and random-init models.
-- No model-quality or drift monitoring: observability is about the service, not the predictions.
-- Single host, no Kubernetes or cloud deployment. No image publishing or release workflow yet (C6).
-- GPU serving is untested on hardware.
