@@ -492,49 +492,51 @@ task that needs them is reached.
 
 ---
 
-## Phase 7 — Model monitoring (SPEC-model-monitoring)
+## Phase 7 — Model monitoring (SPEC-model-monitoring) — **DROPPED 2026-11-13 (owner): system-level monitoring only (Phase 6), no model monitoring**
 
-- [ ] **M1: Stats module** — M
+M1–M6 and Q13 are kept below for reference and are not to be worked. `SPEC-model-monitoring.md` is not being implemented.
+
+- [ ] ~~**M1: Stats module**~~ — M · **DROPPED**
   - Do: `gateway/stats.py`: input/output stats and data-consistency error (numpy); golden-value tests;
     performance test (≤ 2% of a 35-slice request).
   - Acceptance: DC error ≈ 0 for perfect reconstruction, monotonic with noise.
   - Verify: `uv run pytest tests/unit/gateway/test_stats.py`.
   - Deps: O1, F7, Q13 · Files: `src/fastmri_knee/gateway/stats.py`, `tests/unit/gateway/test_stats.py`
 
-- [ ] **M2: Stats metrics in the request path** — S
+- [ ] ~~**M2: Stats metrics in the request path**~~ — S · **DROPPED**
   - Do: histograms `model_input_stat`, `model_output_stat`, `model_data_consistency_error`, shape-other counter;
     labelled by `model_version`.
   - Acceptance: emitted per slice; bounded labels.
   - Verify: `uv run pytest tests/unit/gateway/test_metrics.py`.
   - Deps: M1 · Files: `src/fastmri_knee/gateway/{telemetry,routes}.py`, `tests/unit/gateway/test_metrics.py`
 
-- [ ] **M3: Baseline stats at registration; baseline gauges in gateway** — M
+- [ ] ~~**M3: Baseline stats at registration; baseline gauges in gateway**~~ — M · **DROPPED**
   - Do: `register` computes `baseline_stats.json` (val split or synthetic, `baseline_source` tag); gateway
     loads it for the served version and exports `model_baseline_quantile`.
   - Acceptance: every new version has the artifact; gauges match file after promote.
   - Verify: `uv run pytest tests/unit/packaging/test_register.py tests/unit/gateway/test_baseline.py`.
   - Deps: P2, M1 · Files: `src/fastmri_knee/packaging/{registry,baseline}.py`, `src/fastmri_knee/gateway/readiness.py`, `tests/unit/gateway/test_baseline.py`
 
-- [ ] **M4: Drift and quality alert rules** — S
+- [ ] ~~**M4: Drift and quality alert rules**~~ — S · **DROPPED**
   - Do: recording rules for live p50; `ModelInputDrift`, `ModelOutputDrift`, `ModelOutputNonFinite`,
     `ModelQualityProxyDegraded`; promtool tests incl. < 100 slices quiet; runbooks.
   - Acceptance/Verify: `make check-configs` green.
   - Deps: M2, M3, O6 · Files: `monitoring/prometheus/rules/model.yml`, `monitoring/prometheus/tests/model_test.yml`, `docs/runbooks/Model*.md`
 
-- [ ] **M5: Model dashboard and promotion annotations** — S
+- [ ] ~~**M5: Model dashboard and promotion annotations**~~ — S · **DROPPED**
   - Do: "Model" dashboard (live vs baseline bands, DC error, per-version slices); packaging posts Grafana
     annotations on promote/rollback.
   - Acceptance: dashboard loads; annotation appears after `make promote`.
   - Verify: `make dashboards && git diff --exit-code`; manual promote check.
   - Deps: M4, O10 · Files: `monitoring/grafana/build_dashboards.py`, `monitoring/grafana/dashboards/model.json`, `src/fastmri_knee/packaging/promote.py`
 
-- [ ] **M6: Drift demo and e2e** — S
+- [ ] ~~**M6: Drift demo and e2e**~~ — S · **DROPPED**
   - Do: `make drift-demo` sends scaled/noisy synthetic volumes; e2e with shortened `for:` override asserts
     `ModelInputDrift` at alert-sink.
   - Acceptance/Verify: `make test-e2e` green.
   - Deps: M5 · Files: `benchmarks/drift_demo.py`, `Makefile`, `tests/e2e/test_drift.py`, `monitoring/prometheus/rules/overrides-test.yml`
 
-### ✅ Checkpoint: Model monitoring — drift e2e green; `make bench` shows ≤ 2% p95 regression from stats
+### ✅ Checkpoint: Model monitoring — **DROPPED 2026-11-13** (was: drift e2e green; `make bench` shows ≤ 2% p95 regression from stats)
 
 ---
 
@@ -717,7 +719,7 @@ so the decision isn't lost.
     30 d. Basis: local p99 248 ms for infer; 2.3-2.9 s for a 35-slice volume. Re-check on real hardware.
   - Trigger: O5 · Blocks: O5 · Spec: SPEC-observability §SLOs
 
-- [ ] **Q13: Data-consistency error as the quality proxy with fully sampled input**
+- [ ] ~~**Q13: Data-consistency error as the quality proxy with fully sampled input**~~ — **DROPPED 2026-11-13** (Phase 7 skipped)
   - Context: with no mask, it measures fidelity to the input rather than undersampled consistency.
   - Recommendation: accept, label clearly on the dashboard.
   - Trigger: M1 · Blocks: M1 · Spec: SPEC-model-monitoring OQ1
