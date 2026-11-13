@@ -17,13 +17,13 @@ reconstruction.
 
 | Decision | Choice |
 |---|---|
-| Deployment target | Docker Compose on a single host, hardened (no Kubernetes/cloud in scope) |
+| Deployment target | Docker Compose on a single host, hardened, for dev and CI; EKS (the k8 platform repo) for production, see [SPEC-platform-eks.md](SPEC-platform-eks.md) (amended 2026-11-13) |
 | Request path | FastAPI = public gateway (validation, preprocessing, auth) → Triton over gRPC. Triton is the only inference engine; the PyTorch path in FastAPI is removed |
 | Hardware | CPU for development and CI; GPU variant available via a Compose override, not exercised in CI |
-| Model registry | MLflow (Compose service), aliases drive promotion |
+| Model registry | MLflow (Compose service, off-cluster), aliases drive promotion; on EKS the promoted model is served from S3 and its version is pinned in git |
 | Training | Google Colab (GPU), driven from VS Code with the Google Colab extension (repo notebook, remote Colab kernel). The kernel runs remotely, so the repo is installed from git at a pinned commit; data and outputs live on Google Drive; the checkpoint + `run_summary.json` are registered locally (Colab can't reach the local MLflow) |
 | Observability stack | Prometheus, Alertmanager, Grafana, Loki, Tempo, Grafana Alloy (log shipping + OTLP), node-exporter, cAdvisor |
-| CI | GitHub Actions; images published to GHCR |
+| CI | GitHub Actions; images published to GHCR; EKS images pushed to ECR from the laptop (GitHub OIDC to AWS is blocked by the org SCP) |
 | Baseline | Commit `d9abbd6` on branch `refactor/prod-infra` |
 
 ## Capability Map
@@ -37,8 +37,10 @@ reconstruction.
 | `observability` | Metrics, structured logs, traces, alert rules, SLOs, dashboards-as-code | gateway, inference-server | [SPEC-observability.md](SPEC-observability.md) |
 | `model-monitoring` | Input/output statistics, drift vs training baseline, label-free quality proxy | observability | [SPEC-model-monitoring.md](SPEC-model-monitoring.md) |
 | `ci-cd` | GitHub Actions quality gates, image build/scan/publish, Compose e2e smoke, benchmark regression | foundation (gains a gate per module) | [SPEC-ci-cd.md](SPEC-ci-cd.md) |
+| `platform-eks` | Production on the k8 EKS platform: Helm chart, S3 model delivery, GitOps promotion, ALB edge, measured capacity | model-packaging, inference-server, gateway, observability | [SPEC-platform-eks.md](SPEC-platform-eks.md) |
 
 Build order: `foundation` → `model-packaging` → `inference-server` → `gateway` → `observability` → `model-monitoring`.
+`platform-eks` comes after `observability`; its k8-repo changes can start in parallel.
 `ci-cd` starts right after `foundation` and gains a gate as each module lands.
 
 ## Target architecture
