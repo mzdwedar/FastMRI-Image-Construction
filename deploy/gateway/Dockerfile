@@ -1,14 +1,14 @@
 # Build from the repo root:  docker build -f deploy/gateway/Dockerfile .
 # Torch-free: only the `gateway` extra is installed (numpy, h5py, FastAPI, tritonclient, ...).
 
-FROM python:3.12-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --extra gateway --no-install-project
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 ARG GIT_SHA=unknown
 ARG VERSION=0.1.0
 LABEL org.opencontainers.image.title="fastmri-knee gateway" \
