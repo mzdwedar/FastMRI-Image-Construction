@@ -37,6 +37,7 @@ gate in every later phase.
 | 7. Model monitoring | M1–M6 | Drift demo fires alert in e2e; stats overhead ≤ 2% |
 | Training track (parallel) | K1–K4 | Colab smoke run writes `best.ckpt` + `run_summary.json`; `make register CKPT=… SUMMARY=…` passes gates |
 | 8. Release and hardening | C6–C8, D1 | All workflows green; tagged image runs via `GATEWAY_IMAGE=...`; README rewritten; human review → merge to `main` |
+| 9. Production on EKS ([SPEC-platform-eks](../SPEC-platform-eks.md)) | E1–E24 (tracks A–E; E1, E3, E13–E16 and part of E22 in the k8 repo) | Platform fit (E4 spike reviewed) → EKS serving (spec criteria 1, 5, 6) → all spec criteria after measure/break |
 
 Gated, outside infra scope: **R1** retrain on preprocessing v2 on Colab, after F8 and K2–K3.
 
@@ -54,6 +55,8 @@ G6 → O1 → O2 → O8;  O9 → O8;  O3 → O4 → O5 → O6;  O7 → O8;  O1,O
 O1 → M1 → M2;  P2 → M3;  M2,M3 → M4 → M5 → M6
 G6 → C6;  C1..C6 → C8;  all → D1
 F5,F7 → K1 → K2 (Colab, manual);  P2,K1 → K3;  K2,C1 → K4;  F8,K2,K3 → R1(gated)
+**E1 → E2, E3 → E4** (fit gate) → E10;  E5, E6, E7, E9 (no deps);  E7,E9 → E8;  E9 → E11, E12(Q19)
+E9,E6,E7 → E10;  E7,E9,E10 → E24 (kind);  E1,E8 → E23;  E3,E10,E11,E12 → E22;  E13 → E14;  E3 → E15;  E9–E12,E13–E15 → **E16** → checkpoint → E17 → E18, E19;  checkpoint → E20;  all → E21
 ```
 
 ## Parallelization
@@ -63,6 +66,8 @@ F5,F7 → K1 → K2 (Colab, manual);  P2,K1 → K3;  K2,C1 → K4;  F8,K2,K3 →
 - Phase 6: tracks {O1→O2}, {O3→O4→O5→O6}, {O7}, {O9 spike} are parallel; join at O8/O10/O11.
 - Phase 7: M3 (packaging side) parallel with M1→M2 (gateway side).
 - Training track K1–K4 runs alongside Phases 3–6.
+- Phase 9: Track A (k8 infra, needs a live cluster) and Track B (E5–E7, Compose only) are independent; E9, E11,
+  E13 can start any time. Cluster sessions are expensive, so batch E3/E4 into one session and E15/E16 into one.
 - Shared contracts that must land before parallel work: metric names (SPEC-observability table), API schema
   (SPEC-gateway table), model card fields (SPEC-model-packaging).
 
@@ -80,6 +85,10 @@ F5,F7 → K1 → K2 (Colab, manual);  P2,K1 → K3;  K2,C1 → K4;  F8,K2,K3 →
 | Colab sessions disconnect; Drive FUSE is slow for h5 reads | Med | Resume from `last.ckpt` on Drive (K1); copy data to `/content` at start (K2) |
 | VS Code Colab kernel: remote runtime can't see local changes; `drive.mount` may behave differently than in the browser | Med | Install from a pushed sha with a notebook check that it exists on the remote; K2 verifies `drive.mount` first and records a fallback |
 | Colab Python/torch/CUDA drift from the local lockfile | Med | Install at a pinned git sha; `requires-python` covers Colab's version (Q2); torch/CUDA recorded in `run_summary.json` |
+| Triton does not fit or is unusably slow on a 2-vCPU Free Tier node (Phase 9) | High | E4 spike before any chart work on Triton; failure reopens Decision 3 (larger or GPU nodes) |
+| Triton image pull dominates scale-out and rollout time (k8: pull was ~65% of create-to-Ready for a 612 MB image) | Med | E2 records the size, E4 the pull time; slim ONNX-Runtime-only image only if the number justifies it |
+| Monitoring stack (Loki, Tempo, Alloy, Alertmanager) crowds the 2-vCPU general nodes (k8 M6: model pods Pending for CPU) | Med | Small requests and retention; E14 records allocated CPU per node; drop Tempo to Compose-only if it doesn't fit |
+| k8 repo has uncommitted work (`CAPABILITY-MAP.md`, `SPEC-drift-monitoring.md`) and `main` is 1 commit ahead of origin | Low | Settle those before the first [k8] task branch |
 | Scope creep (16 services in Compose) | Med | Each new service needs spec approval (Ask first); observability services behind a Compose profile if dev startup > 2 min |
 
 ## Open questions (block the tasks noted)

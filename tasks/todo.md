@@ -580,6 +580,267 @@ M1–M6 and Q13 are kept below for reference and are not to be worked. `SPEC-mod
 
 ---
 
+## Phase 9 — Production on EKS (SPEC-platform-eks)
+
+Two repos. **[k8]** = `~/Desktop/k8` (`scalable-observed-inference`), everything else is this repo. The k8 cluster is
+destroyed every session (`make down`), so every **[k8]**/cluster task ends by copying numbers into `results/` and
+NOTES before teardown. Tracks A (platform) and B (app code) run in parallel; C needs E4's numbers; D needs C merged.
+
+### Track A — platform foundation and the fit spike (riskiest first)
+
+- [ ] **E1: [k8] Bootstrap: models bucket and ECR repos** — S
+  - Do: in `infra/bootstrap/`: S3 bucket `<prefix>-models` (versioning, SSE-S3, public access blocked, no
+    `force_destroy`, lifecycle that expires noncurrent object versions after 30 days only); ECR `fastmri/gateway`
+    and `fastmri/triton` with the same settings as `k8-learning/model-server` (immutable, scan on push, lifecycle).
+    Outputs for bucket name and repo URLs.
+  - Acceptance: `terraform plan` shows only additions; after apply, the ECR API reports `IMMUTABLE` + scan on push
+    for both repos and the S3 API reports versioning `Enabled` and all four public-access blocks.
+  - Verify: `terraform -chdir=infra/bootstrap plan` → "No changes" after apply.
+  - Deps: none · Files: `infra/bootstrap/s3-models.tf`, `infra/bootstrap/ecr.tf`, `infra/bootstrap/outputs.tf`
+
+- [ ] **E2: Push images to ECR from the laptop** — S
+  - Do: `make push-images`: build the gateway `--platform linux/amd64` tagged with the short git sha; pull
+    `nvcr.io/nvidia/tritonserver:24.08-py3` (amd64), retag as `fastmri/triton:24.08-py3`, push both. Refuse to push a
+    dirty tree. Skip (not fail) when the tag already exists, since tags are immutable.
+  - Acceptance: both images in ECR; compressed sizes recorded in SPEC-platform-eks (Decision 4 needs the Triton
+    number).
+  - Verify: `aws ecr describe-images` lists both tags; second run of `make push-images` is a no-op.
+  - Deps: E1 · Files: `Makefile`, `scripts/push_images.sh`
+
+- [ ] **E3: [k8] Inference node group and Pod Identity** — M
+  - Do: in `infra/cluster/`: node group `inference` (`m7i-flex.large`, 50 GiB gp3 root, taint
+    `workload=inference:NoSchedule`, label `role=inference`, min 2 / max 3, `capacity_type` shared with the default
+    group). Pod Identity: role for SA `fastmri/triton` with `s3:GetObject`/`ListBucket` on the models bucket only;
+    role for `kube-system/aws-load-balancer-controller` with the controller's published policy (vendored JSON,
+    version pinned in a comment).
+  - Acceptance: 2 inference nodes `Ready` with the taint and label; root volume 50 GiB; both associations listed;
+    general-node pods do not schedule there.
+  - Verify: `kubectl get nodes -L role`; `kubectl describe node` (taints); `aws eks list-pod-identity-associations`.
+  - Deps: E1 · Files: `infra/cluster/eks.tf`, `infra/cluster/iam.tf`, `infra/cluster/variables.tf`,
+    `infra/cluster/policies/aws-load-balancer-controller.json`
+
+- [ ] **E4: Spike: Triton on an inference node, by hand** — S · **fail-fast gate for Decision 3**
+  - Do: throwaway manifest (kept in `results/`, not the chart): Pod on `role=inference`, SA `triton`, init container
+    `amazon/aws-cli` copying a random-init `unet_model/1/` from S3 (uploaded by hand), Triton from ECR with the
+    Compose flags, CPU request = limit 1.5, ORT threads 1 and 2. Then in-cluster `benchmarks/load_test.py` at c=1, 4, 16.
+  - Acceptance: recorded: image pull time, init time, start-to-ready, RSS, throughput and p99 per thread setting,
+    whether it fits next to DaemonSets on `m7i-flex.large`. Written proposal for the chart's CPU, memory, threads
+    and startup budget. If it doesn't fit or is unusable, stop and reopen Decision 3.
+  - Verify: numbers in `results/<date>-triton-spike.md`; Pod Identity proven by the init container reading S3.
+  - Deps: E2, E3 · Files: `results/<date>-triton-spike.md`, `results/triton-spike-pod.yaml`
+
+### ✅ Checkpoint: Platform fit — Triton serves on EKS by hand; sizing proposal reviewed by you before Track C's triton work
+
+### Track B — app changes (this repo; parallel with Track A, all testable on Compose)
+
+- [ ] **E5: `X-Model-Version` from the Triton response** — S · SPEC-platform-eks R6
+  - Do: take the version from each infer response's `model_version` (all chunks must agree, else 500 + error
+    metric); use it for the header, the HDF5 `model_version` attr and the log field. Readiness cache stays for
+    `/readyz` and `/v1/model` only. Update SPEC-gateway.
+  - Acceptance: a response is never labelled with a version that did not compute it; a mixed-version chunk set
+    is a 500, not a mislabelled 200.
+  - Verify: unit tests with `FakeTritonClient` returning versions 1/2 and mixed; `make test`; P8/e2e still green.
+  - Deps: none · Files: `src/fastmri_knee/gateway/triton_client.py`, `routes.py`, `app.py`, `tests/unit/…`,
+    `SPEC-gateway.md`
+
+- [ ] **E6: gRPC client-side load balancing option** — S · R7
+  - Do: setting `GATEWAY_TRITON_LB_POLICY` (default unset = current behaviour). When set, build
+    `channel_args` = tritonclient's defaults (max send/receive message length, keepalive) **plus**
+    `grpc.lb_policy_name`. Passing `channel_args` replaces the defaults (checked in tritonclient 2.66), and without
+    them gRPC's 4 MB limit breaks 16-slice batches (~6.5 MB).
+  - Acceptance: with `round_robin` and URL `dns:///triton:8001`, a 16-slice batch succeeds; options include the
+    message-size limits.
+  - Verify: unit test on the built options; integration test with the policy set against Compose Triton.
+  - Deps: none · Files: `src/fastmri_knee/gateway/settings.py`, `triton_client.py`, `tests/unit/…`,
+    `tests/integration/…`
+
+- [ ] **E7: `sync --target s3`** — M · R4, R5
+  - Do: resolve alias → version n; upload `model.onnx`, rendered `config.pbtxt` (profile and thread count as
+    arguments) and `model_card.json` to `s3://<bucket>/unet_model/n/`, plus `model.onnx.sha256` in `sha256sum -c`
+    format so the init container can verify without jq. Verify sha256 against the card before upload; skip
+    unchanged objects; never delete. Adds `boto3` to the `export` extra (approved with the spec).
+  - Acceptance: second run uploads nothing; checksum mismatch aborts before any upload; the object layout matches
+    what E10's init container expects.
+  - Verify: unit tests with botocore `Stubber`; one manual run against the real bucket.
+  - Deps: E1 (for the manual run only) · Files: `src/fastmri_knee/packaging/sync.py`, `__main__.py`,
+    `pyproject.toml`, `uv.lock`, `tests/unit/…`
+
+- [ ] **E8: `make promote TARGET=eks` opens the PR** — S · R5
+  - Do: after all existing gates pass and E7's sync succeeds: branch `promote/unet-v<n>`, set `model.version: n` in
+    `deploy/helm/fastmri/values-prod.yaml` (one-line change), push, `gh pr create`. `make rollback TARGET=eks` does
+    the same with `previous_production`. MLflow alias is set only after the PR is created.
+  - Acceptance: the PR diff is exactly one line; a failed gate creates no branch and uploads nothing.
+  - Verify: unit tests on the values edit (golden file); dry-run flag prints the diff without pushing.
+  - Deps: E7, E9 · Files: `src/fastmri_knee/packaging/promote.py`, `Makefile`, `tests/unit/…`
+
+- [ ] **E23: Back up the MLflow registry to the models bucket** — XS
+  - Do: `make registry-backup`: SQLite online backup (`sqlite3 .backup`, not a file copy of a live DB) of the
+    MLflow volume's `mlflow.db`, uploaded to `s3://<bucket>/registry-backups/mlflow-<UTC timestamp>.db`; run it at the
+    end of `make promote TARGET=eks` and `make rollback TARGET=eks`. Restore steps in `docs/`.
+  - Acceptance: a backup restored into a fresh Compose MLflow shows the same versions, aliases and
+    `previous_production` tags.
+  - Verify: restore drill once, recorded.
+  - Deps: E1, E8 · Files: `Makefile`, `scripts/registry_backup.sh`, `docs/registry-backup.md`
+
+### Track C — Helm chart (this repo)
+
+- [ ] **E9: Chart skeleton: gateway, and `make helm-check`** — M
+  - Do: `deploy/helm/fastmri/`: gateway Deployment (k8 chart conventions: split probes, `maxUnavailable: 0`, preStop,
+    `checksum/config`, non-root, read-only rootfs), Service, ConfigMap, `api_keys` Secret mount (Secret created
+    outside the chart), `/tmp` emptyDir sized from `MAX_UPLOAD_MB × MAX_INFLIGHT`, PDB; `values-dev.yaml`,
+    `values-prod.yaml`. `make helm-check` = `helm lint --strict` + `helm template | kubeconform -strict` for both
+    values files, against the cluster's Kubernetes version; add to `ci.yml`.
+  - Acceptance: both values files render and pass kubeconform; a wrong-shape `resources` value fails the check
+    (the k8 M4 case lint misses).
+  - Verify: `make helm-check`; drill with a mis-indented value fails CI.
+  - Deps: none · Files: `deploy/helm/fastmri/{Chart.yaml,values*.yaml,templates/gateway-*.yaml}`, `Makefile`,
+    `.github/workflows/ci.yml`
+
+- [ ] **E10: Chart: Triton with S3 init container** — M · R3, R4
+  - Do: Deployment on `role=inference` + toleration, SA `triton`; init container copies
+    `unet_model/{{ model.version }}/` to an emptyDir and runs `sha256sum -c`; Triton mounts it read-only; headless
+    Service; PDB; `/dev/shm` memory emptyDir; readiness `/v2/models/unet_model/ready`; liveness `/v2/health/live`
+    5 s × 6; startup budget, CPU, memory and ORT threads from E4 (threads rendered from the CPU limit). Gateway
+    `GATEWAY_TRITON_URL=dns:///<headless>:8001` + `round_robin` (E6).
+  - Acceptance: renders and passes `helm-check`; a corrupt `model.onnx` keeps the pod in `Init:Error` (tested on the
+    cluster in the Track D checkpoint).
+  - Verify: `make helm-check`; golden `helm template` snapshot test.
+  - Deps: E9, E4 (sizing), E6, E7 (layout) · Files: `deploy/helm/fastmri/templates/triton-*.yaml`, `values*.yaml`,
+    `tests/unit/test_helm_golden.py`
+
+- [ ] **E11: Chart: ServiceMonitors, rules and dashboards from the existing sources** — M · R9
+  - Do: ServiceMonitors for gateway `/metrics` and Triton :8002; PrometheusRules rendered from
+    `monitoring/prometheus/rules/*.yml` and dashboard ConfigMaps (`grafana_dashboard=1`) from
+    `build_dashboards.py` output, so one source serves Compose and EKS; CI fails if the rendered chart files are
+    stale (same pattern as `make dashboards`). Add p99-per-pod panels for gateway and Triton.
+  - Acceptance: `promtool test rules` still covers every rule; rendered PrometheusRules are byte-equal to the
+    sources' groups; per-pod p99 panels present.
+  - Verify: `make check-configs dashboards helm-check`; CI stale-file check drill.
+  - Deps: E9 · Files: `scripts/render_chart_monitoring.py`, `deploy/helm/fastmri/templates/monitoring-*.yaml`,
+    `deploy/helm/fastmri/files/…`, `monitoring/grafana/build_dashboards.py`, `Makefile`
+
+- [ ] **E12: Chart: ALB Ingress** — S · R11 · needs Q19
+  - Do: Ingress for the gateway only (`ingressClassName: alb`, `target-type: ip`, healthcheck `/readyz`, idle timeout
+    above the gateway request deadline); HTTPS with `certificate-arn` value when set, HTTP-only allowed in dev.
+  - Acceptance: renders for both values files; no Ingress or LoadBalancer for Triton anywhere in the chart.
+  - Verify: `make helm-check`; a test asserting no Triton-facing Ingress/LB.
+  - Deps: E9, Q19 · Files: `deploy/helm/fastmri/templates/gateway-ingress.yaml`, `values*.yaml`
+
+- [ ] **E22: NetworkPolicy: only the gateway reaches Triton** — S
+  - Do: **[k8]** enable network policy in the VPC CNI add-on (`configuration_values = {enableNetworkPolicy = "true"}`
+    in `eks.tf`). Chart: default-deny ingress in the `fastmri` namespace; allow Triton :8001 from gateway pods only,
+    Triton :8002 and gateway `/metrics` from the `monitoring` namespace, gateway :8000 from the ALB (target-type
+    `ip`: VPC CIDR, since ALB source IPs are not stable); allow egress to DNS, Triton, the OTLP collector and S3
+    (init container) as needed.
+  - Acceptance: a debug pod in another namespace times out on Triton :8001; the gateway still reconstructs;
+    Prometheus targets stay `up`.
+  - Verify: `make helm-check`; on the cluster, `kubectl run` a curl pod in `default` and in `fastmri`.
+  - Deps: E10, E11, E12, E3 · Files: `deploy/helm/fastmri/templates/networkpolicy.yaml`, `values*.yaml`,
+    **[k8]** `infra/cluster/eks.tf`
+
+- [ ] **E24: CI: install the chart into kind and smoke-test it** — M
+  - Do: `make kind-smoke` and a CI job: kind cluster, local gateway image loaded, Triton from the same pinned tag
+    (the Compose CI already pulls it), a local MinIO standing in for S3 so the real init container runs, random-init
+    model synced with E7's code to MinIO, `helm install -f values-dev.yaml` plus a `values-kind.yaml`
+    (no Ingress, no node taints, MinIO endpoint), then `tests/e2e/test_smoke.py` through a port-forward. NetworkPolicy
+    is not enforced by kind's default CNI, so E22 stays a cluster check.
+  - Acceptance: the job installs the chart, the pods become Ready and a synthetic volume reconstructs; a broken
+    template or a bad init-container path fails the job.
+  - Verify: CI run; drill with a wrong `model.version` fails it.
+  - Deps: E7, E9, E10 · Files: `.github/workflows/kind.yml`, `Makefile`, `deploy/helm/fastmri/values-kind.yaml`,
+    `scripts/kind_smoke.sh`
+
+### Track D — platform GitOps (k8 repo)
+
+- [ ] **E13: [k8] Alertmanager on; retire model-server** — S
+  - Do: kube-prometheus-stack values: Alertmanager enabled (small resources), receivers equivalent to Compose
+    (default sink + optional Slack from a Secret), `ruleSelectorNilUsesHelmValues: false` and
+    `serviceMonitorSelectorNilUsesHelmValues: false` so the fastmri namespace is picked up. Remove
+    `gitops/apps/model-server.yaml` (k8 history keeps it).
+  - Acceptance: Alertmanager Healthy; `PrometheusNotConnectedToAlertmanagers` resolved; model-server pods gone.
+  - Verify: Argo Synced + Healthy; a test PrometheusRule in another namespace is loaded.
+  - Deps: none · Files: `gitops/apps/kube-prometheus-stack.yaml`, `gitops/apps/model-server.yaml` (deleted)
+
+- [ ] **E14: [k8] Loki, Tempo, Alloy** — M
+  - Do: pinned Applications; Loki and Tempo single-binary, filesystem storage, short retention (data is lost on
+    `make down` anyway); Alloy DaemonSet with a Kubernetes version of `monitoring/alloy/config.alloy`: pod logs
+    labelled `service`/`level` only, OTLP receiver and the same tail sampling (errors, > 2 s,
+    `TRACE_SAMPLE_PERCENT`); Grafana datasources for both, with the log → trace link.
+  - Acceptance: all Healthy; a test pod's JSON log is queryable by `service`; total requests of the new pods leave
+    room on the general nodes (`kubectl describe nodes` allocated CPU recorded).
+  - Verify: Grafana Explore query; Argo Synced + Healthy.
+  - Deps: E13 · Files: `gitops/apps/{loki,tempo,alloy}.yaml`, `gitops/values/alloy-config.alloy`
+
+- [ ] **E15: [k8] AWS Load Balancer Controller** — S
+  - Do: pinned Application, SA bound by E3's Pod Identity association, cluster name and VPC id from values.
+  - Acceptance: a throwaway Ingress gets an ALB; `make down` deletes it before `terraform destroy` and no ALB or
+    controller-created security group is left (`aws elbv2 describe-load-balancers` empty).
+  - Verify: Argo Healthy; full `make down` check.
+  - Deps: E3 · Files: `gitops/apps/aws-load-balancer-controller.yaml`
+
+- [ ] **E16: [k8] Wire fastmri: deploy key, Secret, Application** — S
+  - Do: Makefile: generalise `argocd-repo-secret` to two repos (second key at `~/.config/k8-learning/fastmri-deploy`,
+    GitHub deploy key on the fastmri repo); `make api-keys-secret` creates `fastmri/gateway-api-keys` from a hash
+    file outside git. `gitops/apps/fastmri.yaml` → fastmri repo, `deploy/helm/fastmri`, `values-prod.yaml`,
+    namespace `fastmri`, automated sync with selfHeal. Detection: set `timeout.reconciliation: 60s` in
+    `gitops/argocd-values.yaml` (default ~180 s; k8 M5 saw 60 s to 4 min). A GitHub webhook would make it instant
+    but needs `argocd-server` reachable from the internet; it is **optional**: only via an ALB restricted to
+    GitHub's hook CIDRs (`api.github.com/meta`) with a webhook secret, and only if the poll proves too slow.
+  - Acceptance: `make down && make up` ends with `fastmri` Synced + Healthy and no manual step except the existing
+    key files on disk; push-to-sync detection ≤ 60 s measured on 3 pushes.
+  - Verify: the rebuild itself, timed; detection times recorded.
+  - Deps: E9–E12 merged to fastmri `main`, E13–E15 · Files: `Makefile`, `gitops/apps/fastmri.yaml`
+
+### ✅ Checkpoint: EKS serving — spec success criteria 1, 5, 6
+  - [ ] `make up` from git alone → gateway and Triton Synced + Healthy, `/readyz` 200 through the ALB
+  - [ ] 35-slice synthetic volume round-trips through the ALB with auth; p95 recorded
+  - [ ] one request visible in Prometheus, Loki and Tempo; killing Triton fires `TritonDown` in Alertmanager ≤ 2 min
+  - [ ] corrupt `model.onnx` in S3 → pod stays in `Init:Error`, old pods keep serving
+  - [ ] NetworkPolicy: Triton unreachable from outside the gateway pods (E22)
+  - [ ] Human review
+
+### Track E — measure and break (cluster, manual; results committed before `make down`)
+
+- [ ] **E17: Knee per Triton pod and gRPC balance** — S
+  - Do: predict first (NOTES style). In-cluster load (k6 pod or `benchmarks/load_test.py` pod): single-slice and
+    35-slice, open model, step until p99 breaks; read per-pod p99 to confirm round_robin spreads load. Set prod
+    replica counts from a rate with margin, not the edge. **New-pod discovery:** gRPC re-resolves DNS mainly on
+    connection failure, so after a Triton rollout (and after a manual scale 2 → 3) check that the new pods receive
+    traffic within a bounded time. If they don't, fix before E18: server-side max connection age if Triton exposes
+    it, else periodic channel recreation in the gateway, else a mesh (ask first: new component).
+  - Acceptance: knee per pod, per-pod request split, chosen replica counts and their reasoning in `results/` and the
+    spec; time until a new Triton pod gets traffic after rollout and after scale-out, measured (or a fix landed).
+  - Deps: checkpoint · Files: `results/…`, `deploy/helm/fastmri/values-prod.yaml`, `SPEC-platform-eks.md`
+
+- [ ] **E18: Promote and rollback under load on EKS** — S
+  - Do: `make promote VERSION=n TARGET=eks`, merge, then rollback, while a constant-rate load runs.
+  - Acceptance: zero failed requests; time from merge to all-new-version recorded; `X-Model-Version` never wrong
+    (E5).
+  - Deps: E8, E17 · Files: `results/…`
+
+- [ ] **E19: Spike to 3× knee** — S
+  - Do: base rate at E17's operating point, jump to 3× for 5 min.
+  - Acceptance: excess load gets 503 within the queue timeout; **zero liveness restarts** (the k8 M6 collapse does
+    not recur). If pods restart, tune `MAX_INFLIGHT` / Triton queue size and rerun before ticking.
+  - Deps: E17 · Files: `results/…`, possibly `values-prod.yaml`
+
+- [ ] **E20: Failure drills** — S
+  - Do: delete a Triton pod; drain an inference node (PDB respected); terminate an inference instance to simulate a
+    Spot reclaim. Under constant load each time.
+  - Acceptance: per drill: errors seen, time to recover, which alert fired; `/readyz` behaviour matches SPEC.md
+    criterion 3.
+  - Deps: checkpoint · Files: `results/…`
+
+- [ ] **E21: Write-up** — S
+  - Do: tradeoffs per decision in NOTES style (what was chosen, measured cost, when to choose differently);
+    README "Production on EKS" section; tick spec success criteria with evidence links.
+  - Acceptance: every SPEC-platform-eks success criterion checked or explicitly marked not met with the reason.
+  - Deps: E17–E20 · Files: `README.md`, `SPEC-platform-eks.md`, `results/…`
+
+### ✅ Checkpoint: Production on EKS — all SPEC-platform-eks success criteria; human review
+
+---
+
 ## Training track — Google Colab (SPEC-foundation req 10, SPEC-model-packaging req 2)
 
 Runs alongside the infra phases; K1 after F5/F7, K3 after P2. I can't execute Colab, so Colab runs are verified by
@@ -748,6 +1009,14 @@ so the decision isn't lost.
   - Options: full set · fixed subset (e.g. N train volumes + full val) recorded in a manifest with file hashes.
   - Recommendation: a committed subset manifest (`configs/data/subset.yaml`), copied to `/content` at session start.
   - Trigger: K2 · Blocks: K2, S11
+
+- [ ] **Q19: TLS on the EKS ALB**
+  - Context: HTTPS on the ALB needs an ACM certificate for a domain you control (DNS validation). Without one the
+    ALB serves HTTP, and API keys cross the internet in clear text.
+  - Options: own domain + ACM certificate (Route 53 hosted zone ~$0.50/month, or DNS at your registrar) · HTTP only,
+    with the ALB restricted to your `/32` (like the k8 API endpoint) · no ALB, port-forward only.
+  - Recommendation: HTTP restricted to your `/32` for dev; ACM certificate before any key is used from outside.
+  - Trigger: E12 · Blocks: E12
 
 ### Setup (S) — steps that need you, an account, or a machine
 

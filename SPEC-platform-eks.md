@@ -77,6 +77,8 @@ the k8 experiments actually measured, not what they predicted.
      an async handler did not fix it). Startup probe budget from the measured model download + load + warmup.
    - CPU request = limit; **ORT intra-op threads rendered from the pod CPU limit**, the same rule as `SERVER_CPUS`
      in Compose (k8 break-it 5: 4 threads on 1 core → p99 2.5 to 4×, 25% throttled at 57% CPU).
+   - NetworkPolicy: default-deny ingress in the namespace; Triton reachable only from gateway pods (gRPC) and the
+     monitoring namespace (metrics). Needs network policy enabled in the VPC CNI add-on (k8 repo).
    - `values-dev.yaml` (1 gateway, 1 triton, auth may be disabled only with `GATEWAY_ENV=dev`) and
      `values-prod.yaml` (≥2 each, auth on, `model.version` pinned).
 4. **Model delivery.** Triton pod init container: download `unet_model/<model.version>/` from S3 to an `emptyDir`,
@@ -87,16 +89,22 @@ the k8 experiments actually measured, not what they predicted.
    init) and gains a `--target eks` sync: upload to S3 (idempotent, checksummed), then write `model.version: n` to
    `values-prod.yaml` on a branch and open a PR. Merge → Argo rolls Triton (`maxUnavailable: 0`). Rollback =
    revert the PR; the previous version must still be in S3 (keep the last 3; the bucket lifecycle never deletes the
-   version referenced in `values-prod.yaml`).
+   version referenced in `values-prod.yaml`). Argo polls every 60 s (`timeout.reconciliation`); a GitHub webhook is
+   optional because it requires exposing `argocd-server` to the internet. Every promote and rollback ends with an
+   online backup of the laptop's `mlflow.db` to the models bucket, so the registry is not a single unbacked file.
 6. **Mixed versions during a rollout.** For the length of a Triton rollout both versions serve. `X-Model-Version`
    must come from the `model_version` in each Triton response, not from the readiness loop's cache, or responses get
    mislabelled. (Gateway change; needs a gateway spec update.)
 7. **gRPC load balancing.** k8 step 10: kube-proxy balances per connection, and one k6 connection hit one pod for
    1296 of 1296 requests. The gateway holds one long-lived gRPC channel per worker, so with a ClusterIP Service each
    worker would pin to one Triton pod. Use a headless Service and a `dns:///` target with `round_robin` load
-   balancing in the gRPC channel. **Verify first** that `tritonclient.grpc.aio` accepts channel args for this; if
-   not, the fallback is one Triton pod per inference node with the gateway's workers spread across them, and the
-   per-pod p99 panel (R9) proves whether it balances.
+   balancing in the gRPC channel. Checked 2026-11-13: `tritonclient` 2.66 `grpc.aio.InferenceServerClient` takes
+   `channel_args`, but they **replace** its defaults, so the max send/receive message lengths and keepalive options
+   must be passed again (gRPC's 4 MB default would reject a 16-slice batch, ~6.5 MB). The per-pod p99 panel (R9)
+   proves whether it balances. gRPC re-resolves DNS mainly on connection failure, so a Triton pod added by a rollout
+   or scale-out may get no traffic for a while; this is measured in the knee test and fixed (server max connection
+   age, periodic channel recreation, or a mesh) before autoscaling Triton. Public subnets already carry `kubernetes.io/role/elb=1` (`k8/infra/network/main.tf`),
+   so ALB subnet discovery needs no change.
 8. **Capacity and scaling.** Start with fixed replicas sized from a measured knee (R10), not an HPA: k8 showed no
    CPU-driven autoscaler can absorb a 3× spike in ~10 s when time-to-capacity is ~170 s with node room, longer
    without. Gateway HPA (CPU, it is light) and Triton scaling on queue time
@@ -120,7 +128,9 @@ the k8 experiments actually measured, not what they predicted.
     the gateway's request deadline. Only the gateway is exposed; Triton has no Ingress and no LoadBalancer Service.
 12. **CI (this repo).** `helm lint --strict`, `helm template | kubeconform` against the cluster's Kubernetes
     version (k8 M4: lint passes wrong-shape values and bad indentation; only schema checks catch them), image build
-    and scan (push stays manual, see Decisions 2).
+    and scan (push stays manual, see Decisions 2). A kind job installs the chart with the real init container
+    (MinIO standing in for S3) and runs the smoke test, so the chart is exercised on every PR, not only
+    schema-checked.
 
 ## Commands (target)
 
@@ -143,7 +153,8 @@ make bench-eks NAME=eks-cpu               # load test through the ALB (or an in-
 - Config: `make helm-check` in CI; golden `helm template` output for dev and prod values.
 - Cluster (manual, results committed to `results/` and `NOTES`-style tables, since the cluster is ephemeral): the
   R10 experiments.
-- Compose e2e stays the PR gate; nothing here runs in CI against a live cluster.
+- kind (CI): chart installs, pods Ready, synthetic volume reconstructs through the gateway.
+- Compose e2e stays the PR gate; nothing here runs in CI against the EKS cluster.
 
 ## Boundaries
 
@@ -172,7 +183,6 @@ list touches fastmri code.
 | Persistent layer | `infra/bootstrap/` | S3 models bucket (versioned, SSE, public access blocked, no `force_destroy`); ECR `fastmri/gateway`, `fastmri/triton` (immutable, scan, lifecycle) | Models and images must survive `make down` |
 | Cluster | `infra/cluster/eks.tf`, `variables.tf` | Node group `inference`: `m7i-flex.large`, 50 GiB disk, taint `workload=inference:NoSchedule`, label `role=inference`, min 2 / max 3 | Triton needs 8 GiB and a big image; keep it off the general nodes running Argo and monitoring |
 | Cluster | `infra/cluster/` | Pod Identity associations: `fastmri/triton` → read models bucket; `kube-system/aws-load-balancer-controller` → LB controller policy | Workload identity (IRSA is blocked) |
-| Cluster | `infra/cluster/` | Tag public subnets `kubernetes.io/role/elb=1` (check `infra/network` first) | ALB subnet discovery |
 | Bootstrap script | `Makefile` | `argocd-repo-secret` handles a second repo (fastmri deploy key, own path under `~/.config/k8-learning/`); `make api-keys-secret` creates the gateway `api_keys` Secret from a hash file outside git | Second Argo source; secrets stay out of git |
 | GitOps | `gitops/apps/` | New Applications: `aws-load-balancer-controller`, `loki`, `tempo`, `alloy`, `fastmri` (points at the fastmri repo, `deploy/helm/fastmri`, `values-prod.yaml`); all charts pinned | Edge, logs, traces, the app |
 | GitOps | kube-prometheus-stack values | Alertmanager on, with the fastmri receivers (alert-sink equivalent + optional Slack); `ruleSelector`/`serviceMonitorSelector` accept objects from the `fastmri` namespace | Alerts must page; k8 had it off |
